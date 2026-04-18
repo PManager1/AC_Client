@@ -46,10 +46,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.birdy.data.AuthManager
 import java.util.Locale
 
@@ -64,7 +67,7 @@ private val OrangeSec3 = Color(0xFFFF9500)
 
 // Navigation pages for Account sub-screens
 enum class AccountPage {
-    Main, Help, Wallet, Pass, ManageAccount, SignIn, SignOut, DeleteAccount
+    Main, Help, Wallet, Pass, ManageAccount, SignIn, SignOut, DeleteAccount, Profile
 }
 
 // Matches iOS ProfessionalSettings.swift
@@ -108,6 +111,12 @@ fun AccountScreen(
             onBack = { currentPage = AccountPage.ManageAccount },
             onAccountDeleted = { currentPage = AccountPage.SignIn }
         )
+        AccountPage.Profile -> ProfileScreen(
+            onBack = {
+                refreshKey++
+                currentPage = AccountPage.Main
+            }
+        )
         AccountPage.Main -> {
             // Read user info from AuthManager — re-read when refreshKey changes (after login/logout)
             val displayName = remember(refreshKey) {
@@ -121,6 +130,7 @@ fun AccountScreen(
                 }
             }
             val isLoggedIn = remember(refreshKey) { AuthManager.isLoggedIn(context) }
+            val profileImageUrl = remember(refreshKey) { AuthManager.getProfileImageUrl() }
 
             Column(
                 modifier = modifier
@@ -133,7 +143,12 @@ fun AccountScreen(
                     name = displayName,
                     rating = 4.95f,
                     isLoggedIn = isLoggedIn,
-                    onClick = { /* TODO: navigate to profile */ }
+                    profileImageUrl = profileImageUrl,
+                    onClick = {
+                        if (isLoggedIn) {
+                            currentPage = AccountPage.Profile
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -246,6 +261,7 @@ fun ProfileCard(
     name: String,
     rating: Float,
     isLoggedIn: Boolean = false,
+    profileImageUrl: String = "",
     onClick: () -> Unit = {}
 ) {
     Surface(
@@ -260,7 +276,7 @@ fun ProfileCard(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(16.dp)
         ) {
-            // Avatar circle — shows orange BG when logged in, gray when not
+            // Avatar circle — loads profile image if URL exists, else shows Person icon
             Box {
                 Box(
                     modifier = Modifier
@@ -272,13 +288,25 @@ fun ProfileCard(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Profile",
-                        tint = if (isLoggedIn) OrangeTitle else Color.Gray.copy(alpha = 0.5f),
-                        modifier = Modifier
-                            .size(60.dp)
-                    )
+                    if (isLoggedIn && profileImageUrl.isNotBlank()) {
+                        // Load actual profile picture from URL (matches iOS AsyncImage)
+                        AsyncImage(
+                            model = profileImageUrl,
+                            contentDescription = "Profile Photo",
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = "Profile",
+                            tint = if (isLoggedIn) OrangeTitle else Color.Gray.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .size(60.dp)
+                        )
+                    }
                 }
                 // Diamond badge (only show when logged in)
                 if (isLoggedIn) {

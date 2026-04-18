@@ -331,6 +331,7 @@ private suspend fun handleDemoLogin(context: android.content.Context): Pair<Bool
                         AuthManager.setUserLastName(user.optString("lastName", ""))
                         AuthManager.setUserEmail(user.optString("email", ""))
                         AuthManager.setUserID(user.optString("_id", ""))
+                        AuthManager.setProfileImageUrl(user.optString("picture", ""))
                     }
 
                     Pair(true, message)

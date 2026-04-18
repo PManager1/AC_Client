@@ -99,6 +99,19 @@ object AuthManager {
         return prefs.getString(KEY_USER_ID, "") ?: ""
     }
 
+    // ── Profile Image URL ─────────────────────────────────
+    private const val KEY_PROFILE_IMAGE_URL = "profileImageUrl"
+
+    fun setProfileImageUrl(url: String) {
+        if (!::prefs.isInitialized) return
+        prefs.edit().putString(KEY_PROFILE_IMAGE_URL, url).apply()
+    }
+
+    fun getProfileImageUrl(): String {
+        if (!::prefs.isInitialized) return ""
+        return prefs.getString(KEY_PROFILE_IMAGE_URL, "") ?: ""
+    }
+
     /** Clear everything on sign-out / account deletion. */
     fun clearAll() {
         if (!::prefs.isInitialized) return
