@@ -172,6 +172,9 @@ fun ProfileScreen(
                                 about = details.optString("about", "")
                                 profileImageUrl = details.optString("profileImage", "")
 
+                                // Persist to AuthManager so Account page can display it
+                                AuthManager.setProfileImageUrl(profileImageUrl)
+
                                 // Load badges
                                 val badgesArray = details.optJSONArray("badges")
                                 if (badgesArray != null) {
@@ -249,9 +252,10 @@ fun ProfileScreen(
                 withContext(Dispatchers.Main) {
                     isSaving = false
                     if (statusCode == 200) {
-                        // Update AuthManager with new name
+                        // Update AuthManager with new name and profile image
                         AuthManager.setUserFirstName(firstName)
                         AuthManager.setUserLastName(lastName)
+                        AuthManager.setProfileImageUrl(profileImageUrl)
                         showSuccessDialog = true
                     } else {
                         errorMessage = "Save failed: HTTP $statusCode"

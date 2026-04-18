@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
+import com.example.birdy.data.AuthManager
 import com.example.birdy.ui.account.AccountScreen
 import com.example.birdy.ui.components.BirdyBottomNavBar
 import com.example.birdy.ui.explore.ExploreScreen
@@ -33,6 +34,7 @@ private const val TAB_ACCOUNT = 3
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AuthManager.init(applicationContext)
         enableEdgeToEdge()
         setContent {
             BirdyTheme {
