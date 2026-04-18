@@ -21,7 +21,6 @@ import com.example.birdy.ui.account.AccountScreen
 import com.example.birdy.ui.components.BirdyBottomNavBar
 import com.example.birdy.ui.explore.ExploreScreen
 import com.example.birdy.ui.fooddelivery.FoodDeliveryScreen
-import com.example.birdy.ui.home.HomeScreen
 import com.example.birdy.ui.inbox.InboxScreen
 import com.example.birdy.ui.theme.BirdyTheme
 
@@ -51,23 +50,17 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun BirdyApp() {
     var selectedTab by remember { mutableIntStateOf(TAB_HOME) }
-    // Tracks if we navigated to FoodDelivery from within the Home tab
-    var showFoodDelivery by remember { mutableIntStateOf(0) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = Color.White,
         bottomBar = {
-            // Hide bottom bar when inside FoodDelivery (matches iOS behavior)
-            if (showFoodDelivery == 0) {
-                BirdyBottomNavBar(
-                    selectedIndex = selectedTab,
-                    onTabSelected = { index ->
-                        selectedTab = index
-                        showFoodDelivery = 0
-                    }
-                )
-            }
+            BirdyBottomNavBar(
+                selectedIndex = selectedTab,
+                onTabSelected = { index ->
+                    selectedTab = index
+                }
+            )
         }
     ) { innerPadding ->
         Box(
@@ -75,9 +68,8 @@ fun BirdyApp() {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (showFoodDelivery == 1) {
-                // Food Delivery is a sub-screen of Home (not a tab)
-                FoodDeliveryScreen(
+            when (selectedTab) {
+                TAB_HOME -> FoodDeliveryScreen(
                     onNavigateToSearch = {
                         // TODO: Navigate to Search screen
                     },
@@ -91,38 +83,12 @@ fun BirdyApp() {
                         // TODO: Navigate to category results
                     }
                 )
-            } else {
-                when (selectedTab) {
-                    TAB_HOME -> HomeScreen(
-                        onNavigateToSearch = {
-                            // TODO: Navigate to HomeSearch screen
-                        },
-                        onNavigateToAllServices = {
-                            // TODO: Navigate to AllServices screen
-                        },
-                        onNavigateToFoodDelivery = {
-                            showFoodDelivery = 1
-                        },
-                        onNavigateToFoodPlaces = {
-                            // TODO: Navigate to FoodPlaces screen
-                        },
-                        onCategoryClick = { categoryId, categoryName ->
-                            // TODO: Navigate to Result screen with categoryId
-                        },
-                        onPopularClick = {
-                            // TODO: Navigate to Result screen
-                        },
-                        onTrendingClick = { searchQuery ->
-                            // TODO: Navigate to search results with query
-                        }
-                    )
 
-                    TAB_EXPLORE -> ExploreScreen()
+                TAB_EXPLORE -> ExploreScreen()
 
-                    TAB_INBOX -> InboxScreen()
+                TAB_INBOX -> InboxScreen()
 
-                    TAB_ACCOUNT -> AccountScreen()
-                }
+                TAB_ACCOUNT -> AccountScreen()
             }
         }
     }
