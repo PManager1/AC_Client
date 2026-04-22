@@ -152,6 +152,7 @@ private fun parseStringArray(arr: JSONArray): List<String> {
 @Composable
 fun StoreScreen(
     onBack: () -> Unit = {},
+    onViewCart: () -> Unit = {},
     jsonInputStream: InputStream? = null
 ) {
     val storeData = remember(jsonInputStream) {
@@ -510,7 +511,7 @@ fun StoreScreen(
                         color = Color(0xFF388E3C),
                         modifier = Modifier
                             .background(Color.White, RoundedCornerShape(50))
-                            .clickable { /* TODO: Show cart */ }
+                            .clickable { onViewCart() }
                             .padding(horizontal = 24.dp, vertical = 12.dp)
                     )
                 }

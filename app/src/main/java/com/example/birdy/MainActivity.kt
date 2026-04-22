@@ -26,6 +26,7 @@ import com.example.birdy.ui.explore.ExploreScreen
 import com.example.birdy.ui.explore.NewFoodPlacesScreen
 import com.example.birdy.ui.explore.SearchFoodScreen
 import com.example.birdy.ui.explore.StoreScreen
+import com.example.birdy.ui.explore.CartSheet
 import com.example.birdy.ui.fooddelivery.FoodDeliveryScreen
 import com.example.birdy.ui.inbox.InboxScreen
 import com.example.birdy.ui.inbox.RequestDetailScreen
@@ -63,6 +64,7 @@ fun BirdyApp() {
     var showSearchFood by remember { mutableStateOf(false) }
     var showFoodPlaces by remember { mutableStateOf(false) }
     var showStore by remember { mutableStateOf(false) }
+    var showCart by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf<ExploreCategory?>(null) }
     val context = LocalContext.current
 
@@ -109,8 +111,14 @@ fun BirdyApp() {
                         showStore -> {
                             StoreScreen(
                                 onBack = { showStore = false },
+                                onViewCart = { showCart = true },
                                 jsonInputStream = context.assets.open("storejson.json")
                             )
+                            if (showCart) {
+                                CartSheet(
+                                    onDismiss = { showCart = false }
+                                )
+                            }
                         }
                         showSearchFood -> {
                             SearchFoodScreen(

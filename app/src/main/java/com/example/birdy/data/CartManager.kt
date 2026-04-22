@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 // Matches iOS CartManager.shared singleton
 
 data class CartItem(
+    val id: String = java.util.UUID.randomUUID().toString(),
     val dishName: String,
     val restaurantName: String,
     val price: Double,
@@ -20,18 +21,51 @@ object CartManager {
     var items by mutableStateOf(mutableListOf<CartItem>())
         private set
 
-    val total: Double
+    var promoCode by mutableStateOf("")
+
+    val subtotal: Double
         get() = items.sumOf { it.price * it.quantity }
+
+    val deliveryFee: Double
+        get() = 3.99
+
+    val serviceFee: Double
+        get() = 2.99
+
+    val tax: Double
+        get() = subtotal * 0.08 // 8% tax
+
+    val total: Double
+        get() = subtotal + deliveryFee + serviceFee + tax
 
     val itemCount: Int
         get() = items.sumOf { it.quantity }
 
     fun addItem(item: CartItem) {
-        val existing = items.find { it.dishName == item.dishName }
+        val existing = items.find {
+            it.dishName == item.dishName && it.selectedOptions == item.selectedOptions
+        }
         if (existing != null) {
-            existing.quantity += 1
+            existing.quantity += item.quantity
+            items = items.toMutableList() // trigger recomposition
         } else {
             items = (items + item).toMutableList()
+        }
+    }
+
+    fun removeItem(item: CartItem) {
+        items = items.filter { it.id != item.id }.toMutableList()
+    }
+
+    fun updateQuantity(item: CartItem, quantity: Int) {
+        val index = items.indexOfFirst { it.id == item.id }
+        if (index >= 0) {
+            if (quantity <= 0) {
+                items = items.filter { it.id != item.id }.toMutableList()
+            } else {
+                items[index].quantity = quantity
+                items = items.toMutableList() // trigger recomposition
+            }
         }
     }
 
@@ -48,7 +82,15 @@ object CartManager {
         }
     }
 
+    fun applyPromoCode() {
+        if (promoCode.lowercase() == "free") {
+            // In a real app, this would apply the promo logic
+            // For now, matching iOS behavior
+        }
+    }
+
     fun clear() {
         items = mutableListOf()
+        promoCode = ""
     }
 }
