@@ -351,8 +351,6 @@ fun ProfileScreen(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp)
             ) {
-                Spacer(modifier = Modifier.height(16.dp))
-
                 // MARK: - Profile Image
                 Box(
                     modifier = Modifier.fillMaxWidth(),
