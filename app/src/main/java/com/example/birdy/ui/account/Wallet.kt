@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -19,18 +20,23 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,9 +91,12 @@ fun Wallet(
     onBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var savedCard by remember { mutableStateOf<SavedCard?>(null) }
     var isLoading by remember { mutableStateOf(false) }
     var showAddSheet by remember { mutableStateOf(false) }
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
+    var isDeletingCard by remember { mutableStateOf(false) }
 
     // Fetch saved card on appear — matches iOS .task { await fetchSavedCard() }
     LaunchedEffect(Unit) {
@@ -252,6 +261,33 @@ fun Wallet(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Delete Button (matches iOS trash button)
+                        IconButton(
+                            onClick = { showDeleteConfirmation = true },
+                            enabled = !isDeletingCard,
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Red.copy(alpha = 0.1f))
+                        ) {
+                            if (isDeletingCard) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.Red
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete Card",
+                                    tint = Color.Red,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                     }
 
                     // --- "Expiring Soon" Warning ---
@@ -307,6 +343,54 @@ fun Wallet(
         }
     }
 
+    // MARK: - Delete Confirmation Dialog (matches iOS .alert("Remove Card?"))
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = {
+                Text(
+                    text = "Remove Card?",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                val card = savedCard
+                if (card != null) {
+                    val brand = card.brand ?: ""
+                    val last4 = card.last4 ?: "????"
+                    Text("This will remove your ${brandDisplayName(brand)} card ending in $last4. You can always add it again later.")
+                } else {
+                    Text("This will remove your saved payment method. You can always add it again later.")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirmation = false
+                        scope.launch {
+                            isDeletingCard = true
+                            val success = deleteCard(context)
+                            if (success) {
+                                savedCard = null
+                                Log.d("Wallet", "✅ Card deleted successfully")
+                            } else {
+                                Log.e("Wallet", "❌ Failed to delete card")
+                            }
+                            isDeletingCard = false
+                        }
+                    }
+                ) {
+                    Text("Remove", color = Color.Red, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     // MARK: - Add Payment Method Bottom Sheet
     if (showAddSheet) {
         AddPaymentMethodSheet(
@@ -336,21 +420,38 @@ fun AddPaymentMethodSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Color.White
+        containerColor = Color.White,
+        dragHandle = null
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
+                .fillMaxSize()
+                .padding(horizontal = 20.dp, vertical = 24.dp)
         ) {
-            // Title
-            Text(
-                text = "Add Payment Method",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Black,
-                modifier = Modifier.padding(bottom = 4.dp)
-            )
+            // Close button row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Add Payment Method",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                    onClick = { scope.launch { sheetState.hide() }.invokeOnCompletion { onDismiss() } },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
 
             HorizontalDivider(color = CardGrey)
 
@@ -365,16 +466,19 @@ fun AddPaymentMethodSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Stripe's secure card input — card data goes directly to Stripe, never touches our server
+            // Stripe's secure multi-line card input — shows all fields at once:
+            // Card Number, Expiry, CVC, and Postal/ZIP code (postalCodeEnabled = true)
+            // Matches iOS STPPaymentCardTextField behavior
             AndroidView(
                 factory = { ctx ->
                     CardInputWidget(ctx).apply {
+                        postalCodeEnabled = true
                         cardInputWidget = this
                     }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
+                    .wrapContentHeight()
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -451,8 +555,7 @@ fun AddPaymentMethodSheet(
                 enabled = !isLoading,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp)
-                    .padding(bottom = 16.dp),
+                    .height(56.dp),
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (isLoading) Color.Gray else BurntOrange
@@ -473,6 +576,9 @@ fun AddPaymentMethodSheet(
                     )
                 }
             }
+
+            // Bottom safe area padding — matches iOS sheet safe area
+            Spacer(modifier = Modifier.height(48.dp))
         }
     }
 }
@@ -527,6 +633,38 @@ private suspend fun fetchSavedCard(context: android.content.Context): SavedCard?
     }
 }
 
+// MARK: - API: Delete Card (matches iOS deleteCard)
+private suspend fun deleteCard(context: android.content.Context): Boolean {
+    return withContext(Dispatchers.IO) {
+        try {
+            val token = AuthManager.getToken(context)
+            if (token.isNullOrEmpty()) {
+                Log.w("Wallet", "⚠️ No auth token found")
+                return@withContext false
+            }
+
+            val url = URL("${Config.API_BASE_URL}/stripe/payment-method")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "DELETE"
+                setRequestProperty("Authorization", "Bearer $token")
+                setRequestProperty("Content-Type", "application/json")
+            }
+
+            val responseCode = conn.responseCode
+            if (responseCode == 200) {
+                Log.d("Wallet", "✅ Card deleted successfully")
+                true
+            } else {
+                Log.w("Wallet", "⚠️ Failed to delete card (HTTP $responseCode)")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e("Wallet", "❌ Error deleting card: ${e.message}")
+            false
+        }
+    }
+}
+
 // MARK: - API: Save Card via Stripe SDK → Backend (matches iOS saveCard + attachPaymentMethod)
 // Accepts PaymentMethodCreateParams directly from CardInputWidget — never touches raw card fields
 private suspend fun saveCardViaStripe(
@@ -542,7 +680,7 @@ private suspend fun saveCardViaStripe(
                 paymentMethodParams,
                 callback = object : ApiResultCallback<PaymentMethod> {
                     override fun onSuccess(result: PaymentMethod) {
-                        cont.resume(result)
+                        cont.resume(result) {}
                     }
 
                     override fun onError(e: Exception) {
