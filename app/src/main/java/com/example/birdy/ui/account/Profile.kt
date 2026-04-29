@@ -79,9 +79,9 @@ private val OrangeSec7 = Color(0xFF1C1C1E)
  *  - Pricing (flatFee, hourlyRate)
  *  - About (multi-line, 500 char limit)
  *  - Badges (display only for now)
- *  - Save button → PATCH /DriverProfile
+ *  - Save button → PATCH /meProfile
  *
- * Fetches profile data on load via GET /me_driver
+ * Fetches profile data on load via GET /me
  */
 @Composable
 fun ProfileScreen(
@@ -130,7 +130,7 @@ fun ProfileScreen(
                     return@withContext
                 }
 
-                val url = URL("${Config.API_BASE_URL}/me_driver")
+                val url = URL("${Config.API_BASE_URL}/me")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
                     setRequestProperty("Authorization", "Bearer $token")
@@ -206,7 +206,7 @@ fun ProfileScreen(
         }
     }
 
-    // Save profile via PATCH /DriverProfile
+    // Save profile via PATCH /meProfile
     suspend fun saveProfile() {
         withContext(Dispatchers.IO) {
             try {
@@ -218,7 +218,7 @@ fun ProfileScreen(
                     return@withContext
                 }
 
-                val url = URL("${Config.API_BASE_URL}/DriverProfile")
+                val url = URL("${Config.API_BASE_URL}/meProfile")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "PATCH"
                     setRequestProperty("Content-Type", "application/json")
