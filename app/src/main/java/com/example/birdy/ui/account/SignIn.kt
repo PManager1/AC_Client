@@ -103,7 +103,7 @@ fun SignInScreen(
 
         // Title
         Text(
-            text = "Sign In to Birdy",
+            text = "Sign In to U-DO",
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold,
             color = OrangeTitle
@@ -246,7 +246,7 @@ fun SignInScreen(
 
         // Terms text
         Text(
-            text = "By providing your phone number, you agree to receive a one-time text message from Birdy for account verification. Message and data rates may apply. Message frequency varies. Reply STOP to opt-out, HELP for help. View our Privacy Policy at Birdyone.com/privacy.",
+            text = "By providing your phone number, you agree to receive a one-time text message from U-DO for account verification. Message and data rates may apply. Message frequency varies. Reply STOP to opt-out, HELP for help. View our Privacy Policy at u-do.com/privacy.",
             fontSize = 12.sp,
             fontWeight = FontWeight.Normal,
             color = Color.Gray,

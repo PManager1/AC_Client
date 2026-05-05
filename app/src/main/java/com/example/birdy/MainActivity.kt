@@ -30,7 +30,7 @@ import com.example.birdy.ui.explore.ExploreScreen
 import com.example.birdy.ui.explore.NewFoodPlacesScreen
 import com.example.birdy.ui.explore.SearchFoodScreen
 import com.example.birdy.ui.store.StoreScreen
-import com.example.birdy.ui.explore.CartSheet
+import com.example.birdy.ui.explore.CartScreen
 import com.example.birdy.ui.explore.CheckoutScreen
 import com.example.birdy.ui.explore.DriverTrackingScreen
 import com.example.birdy.ui.fooddelivery.FoodDeliveryScreen
@@ -128,6 +128,15 @@ fun BirdyApp() {
                                 }
                             )
                         }
+                        showCart -> {
+                            CartScreen(
+                                onBack = { showCart = false },
+                                onCheckout = {
+                                    showCart = false
+                                    showCheckout = true
+                                }
+                            )
+                        }
                         showStore -> {
                             StoreScreen(
                                 onBack = { showStore = false },
@@ -135,15 +144,6 @@ fun BirdyApp() {
                                 restaurantId = selectedRestaurantId,
                                 jsonInputStream = if (selectedRestaurantId.isEmpty()) context.assets.open("storejson.json") else null
                             )
-                            if (showCart) {
-                                CartSheet(
-                                    onDismiss = { showCart = false },
-                                    onCheckout = {
-                                        showCart = false
-                                        showCheckout = true
-                                    }
-                                )
-                            }
                         }
                         showSearchFood -> {
                             SearchFoodScreen(

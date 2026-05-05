@@ -95,7 +95,7 @@ fun RequestDetailScreen(
             verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Text(
-                text = "BirdyX • Sep 21, 2025 • 5:10 PM",
+                text = "U-DOX • Sep 21, 2025 • 5:10 PM",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.Gray
@@ -360,7 +360,7 @@ fun RequestDetailScreen(
                         .padding(16.dp)
                 ) {
                     Text(
-                        text = "Tap to see the weekly breakdown of customer price and Birdy service fees at drivers.birdy.com",
+                        text = "Tap to see the weekly breakdown of customer price and U-DO service fees at drivers.u-do.com",
                         fontSize = 15.sp,
                         modifier = Modifier.weight(1f)
                     )

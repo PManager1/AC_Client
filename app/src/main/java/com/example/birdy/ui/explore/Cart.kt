@@ -20,20 +20,19 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,47 +54,30 @@ import com.example.birdy.data.CartItem
 import com.example.birdy.data.CartManager
 import com.example.birdy.ui.store.ItemDetailSheet
 
-// MARK: - Cart Bottom Sheet (matches iOS sheet presentation)
+// MARK: - Cart Screen (full page, matches iOS NavigationLink presentation)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CartSheet(
-    onDismiss: () -> Unit,
-    onCheckout: () -> Unit = {}
-) {
-    val sheetState = rememberModalBottomSheetState(
-        skipPartiallyExpanded = true
-    )
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = Color.White,
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-    ) {
-        Cart(
-            onDismiss = onDismiss,
-            onCheckout = onCheckout
-        )
-    }
-}
-
-// MARK: - Cart View (matches iOS Cart)
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun Cart(
-    onDismiss: () -> Unit = {},
+fun CartScreen(
+    onBack: () -> Unit,
     onCheckout: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(fraction = 0.9f)
+            .fillMaxSize()
             .background(Color.White)
     ) {
-        // Header with title and Clear button
+        // Header with back arrow, title and Clear button
         TopAppBar(
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.Black
+                    )
+                }
+            },
             title = {
                 Text(
                     text = "Your Cart",
@@ -124,7 +106,7 @@ fun Cart(
         )
 
         if (CartManager.items.isEmpty()) {
-            EmptyCartView(onDismiss = onDismiss)
+            EmptyCartView(onDismiss = onBack)
         } else {
             CartListView(onCheckout = onCheckout)
         }
@@ -313,17 +295,15 @@ private fun CartListView(onCheckout: () -> Unit = {}) {
             // Proceed to Checkout button
             Text(
                 text = "Proceed to Checkout • $${String.format("%.2f", CartManager.total)}",
-                fontSize = 20.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
                     .background(
-                        Brush.horizontalGradient(
-                            colors = listOf(Color(0xFF4CAF50), Color(0xFF388E3C))
-                        ),
-                        RoundedCornerShape(16.dp)
+                        Color(0xFF4CAF50),
+                        RoundedCornerShape(10.dp)
                     )
                     .clickable { onCheckout() }
                     .padding(vertical = 16.dp),

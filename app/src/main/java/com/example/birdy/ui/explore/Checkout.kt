@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -25,10 +26,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -117,11 +120,12 @@ fun CheckoutScreen(
 
     var selectedAddress by remember { mutableStateOf(addresses.first()) }
     var selectedPayment by remember { mutableStateOf(paymentMethods.first()) }
-    var tipAmount by remember { mutableStateOf(5.0) }
+    var tipAmount by remember { mutableStateOf(4.0) }
     var leaveAtDoor by remember { mutableStateOf(true) }
     var showOrderSuccess by remember { mutableStateOf(false) }
     var isPlacingOrder by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+    var showTipPage by remember { mutableStateOf(false) }
 
     val totalWithTip = CartManager.total + tipAmount
 
@@ -273,105 +277,115 @@ fun CheckoutScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Scrollable content
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(bottom = 100.dp)
-            ) {
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Delivery Address section
-                DeliveryAddressSection(
-                    addresses = addresses,
-                    selectedAddress = selectedAddress,
-                    onAddressSelected = { selectedAddress = it },
-                    leaveAtDoor = leaveAtDoor,
-                    onLeaveAtDoorChanged = { leaveAtDoor = it }
+            if (showTipPage) {
+                // Show TipPage as full-screen overlay (matches iOS .fullScreenCover)
+                TipPage(
+                    onBack = { showTipPage = false },
+                    onTipSelected = { tipAmount = it },
+                    subtotal = CartManager.subtotal
                 )
+            } else {
+                // Scrollable content
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(bottom = 100.dp)
+                ) {
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(20.dp))
+                    // Delivery Address section
+                    DeliveryAddressSection(
+                        addresses = addresses,
+                        selectedAddress = selectedAddress,
+                        onAddressSelected = { selectedAddress = it },
+                        leaveAtDoor = leaveAtDoor,
+                        onLeaveAtDoorChanged = { leaveAtDoor = it }
+                    )
 
-                // Payment Method section
-                PaymentMethodSection(
-                    paymentMethods = paymentMethods,
-                    selectedPayment = selectedPayment,
-                    onPaymentSelected = { selectedPayment = it }
-                )
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                Spacer(modifier = Modifier.height(20.dp))
+                    // Payment Method section
+                    PaymentMethodSection(
+                        paymentMethods = paymentMethods,
+                        selectedPayment = selectedPayment,
+                        onPaymentSelected = { selectedPayment = it }
+                    )
 
-                // Order Items section
-                OrderItemsSection()
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                Spacer(modifier = Modifier.height(20.dp))
+                    // Order Items section
+                    OrderItemsSection()
 
-                // Tip section
-                TipSection(
-                    tipAmount = tipAmount,
-                    onTipSelected = { tipAmount = it }
-                )
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                Spacer(modifier = Modifier.height(20.dp))
+                    // Tip section
+                    TipSection(
+                        tipAmount = tipAmount,
+                        onTipSelected = { tipAmount = it },
+                        onShowTipPage = { showTipPage = true }
+                    )
 
-                // Summary section
-                SummarySection(
-                    tipAmount = tipAmount,
-                    totalWithTip = totalWithTip
-                )
+                    Spacer(modifier = Modifier.height(20.dp))
 
-                Spacer(modifier = Modifier.height(20.dp))
-            }
+                    // Summary section
+                    SummarySection(
+                        tipAmount = tipAmount,
+                        totalWithTip = totalWithTip
+                    )
 
-            // Floating Place Order button at bottom
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .background(Color.White)
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-            ) {
-                // Error message
-                if (errorMessage.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+
+                // Floating Place Order button at bottom
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .background(Color.White)
+                        .padding(horizontal = 16.dp, vertical = 16.dp)
+                ) {
+                    // Error message
+                    if (errorMessage.isNotEmpty()) {
+                        Text(
+                            text = errorMessage,
+                            fontSize = 13.sp,
+                            color = Color.Red,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                        )
+                    }
+
                     Text(
-                        text = errorMessage,
-                        fontSize = 13.sp,
-                        color = Color.Red,
+                        text = if (isPlacingOrder) "Placing Order..." else "Place Order • $${String.format("%.2f", totalWithTip)}",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(bottom = 8.dp)
+                            .background(
+                                when {
+                                    showOrderSuccess -> Color(0xFF4CAF50)
+                                    isPlacingOrder -> Color.Gray
+                                    else -> Color(0xFFCC5500)
+                                },
+                                RoundedCornerShape(10.dp)
+                            )
+                            .clickable(enabled = !isPlacingOrder && !showOrderSuccess) {
+                                scope.launch {
+                                    handlePlaceOrder()
+                                }
+                            }
+                            .padding(vertical = 16.dp),
+                        textAlign = TextAlign.Center
                     )
                 }
 
-                Text(
-                    text = if (isPlacingOrder) "Placing Order..." else "Place Order • $${String.format("%.2f", totalWithTip)}",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(
-                            when {
-                                showOrderSuccess -> Color(0xFF4CAF50)
-                                isPlacingOrder -> Color.Gray
-                                else -> Color(0xFFCC5500)
-                            },
-                            RoundedCornerShape(16.dp)
-                        )
-                        .clickable(enabled = !isPlacingOrder && !showOrderSuccess) {
-                            scope.launch {
-                                handlePlaceOrder()
-                            }
-                        }
-                        .padding(vertical = 16.dp),
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            // Success overlay — matches iOS OrderSuccessOverlay (shown for 1 second before driver tracking)
-            if (showOrderSuccess) {
-                OrderSuccessOverlay()
+                // Success overlay — matches iOS OrderSuccessOverlay (shown for 1 second before driver tracking)
+                if (showOrderSuccess) {
+                    OrderSuccessOverlay()
+                }
             }
         }
     }
@@ -627,13 +641,18 @@ private fun OrderItemsSection() {
     }
 }
 
-// MARK: - Tip Section (matches iOS tipSection)
+// MARK: - Tip Section (matches iOS tipSection — $4, $5, $10, Other)
+
+private val PRESET_TIPS = listOf(4.0, 5.0, 10.0)
 
 @Composable
 private fun TipSection(
     tipAmount: Double,
-    onTipSelected: (Double) -> Unit
+    onTipSelected: (Double) -> Unit,
+    onShowTipPage: () -> Unit = {}
 ) {
+    val isPresetTip = tipAmount in PRESET_TIPS
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -652,9 +671,9 @@ private fun TipSection(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            listOf(0.0, 2.0, 5.0, 10.0).forEach { tip ->
-                val isSelected = tipAmount == tip
-                val label = if (tip == 0.0) "No tip" else "$${tip.toInt()}"
+            (PRESET_TIPS + listOf(-1.0)).forEach { tip ->
+                val isSelected = if (tip == -1.0) !isPresetTip else tipAmount == tip
+                val label = if (tip == -1.0) "Other" else "$${tip.toInt()}"
 
                 Box(
                     modifier = Modifier
@@ -663,7 +682,13 @@ private fun TipSection(
                             if (isSelected) Color(0xFFCC5500) else Color.Transparent,
                             RoundedCornerShape(12.dp)
                         )
-                        .clickable { onTipSelected(tip) }
+                        .clickable {
+                            if (tip == -1.0) {
+                                onShowTipPage()
+                            } else {
+                                onTipSelected(tip)
+                            }
+                        }
                         .padding(vertical = 14.dp),
                     contentAlignment = Alignment.Center
                 ) {
