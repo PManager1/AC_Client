@@ -3,8 +3,6 @@ package com.example.birdy.ui.store
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,9 +22,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.material.icons.filled.DirectionsBike
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
@@ -45,6 +46,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.birdy.data.Config
 import com.mapbox.geojson.Point
@@ -62,11 +64,11 @@ import java.util.Locale
 // MARK: - Color Constants
 private val BurntOrange = Color(0xFFCC5500)
 
-// MARK: - Restaurant Info Full-Screen Sheet (matches iOS RestaurantInfoSheet)
+// MARK: - Store Info Full-Screen Sheet (matches iOS StoreInfo)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun RestaurantInfoSheet(
+fun StoreInfo(
     data: StoreData,
     onDismiss: () -> Unit
 ) {
@@ -199,28 +201,63 @@ fun RestaurantInfoSheet(
                     modifier = Modifier.size(26.dp),
                     tint = BurntOrange
                 )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = data.location_info.address,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = Color.Black
-                    )
-                }
-                // "Change" capsule button (matches iOS)
                 Text(
-                    text = "Change",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = BurntOrange,
-                    modifier = Modifier
-                        .background(BurntOrange.copy(alpha = 0.12f), RoundedCornerShape(50))
-                        .padding(horizontal = 18.dp, vertical = 10.dp)
+                    text = data.location_info.address,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.Black,
+                    modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
+        // PHONE SECTION (matches iOS — shown between Address and Hours)
+        if (!data.location_info.phone.isNullOrEmpty()) {
+            val context = LocalContext.current
+            Column(
+                modifier = Modifier.padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text(
+                    text = "Phone",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = data.location_info.phone,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Normal,
+                        color = Color.Black,
+                        modifier = Modifier
+                            .weight(1f)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(Color(0xFF4CAF50), CircleShape)
+                            .clickable {
+                                val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${data.location_info.phone}"))
+                                context.startActivity(intent)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Phone,
+                            contentDescription = "Call",
+                            modifier = Modifier.size(16.dp),
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
+        }
 
         // 4. HOURS SECTION (matches iOS — delivery time card + expandable full schedule)
         Column(
@@ -283,8 +320,8 @@ fun RestaurantInfoSheet(
             // Expandable hours list (matches iOS spring animation + HourRow)
             AnimatedVisibility(
                 visible = isHoursExpanded,
-                enter = fadeIn() + slideInVertically(),
-                exit = fadeOut() + slideOutVertically()
+                enter = fadeIn(),
+                exit = fadeOut()
             ) {
                 Column(
                     modifier = Modifier

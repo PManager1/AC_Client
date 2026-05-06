@@ -486,7 +486,7 @@ fun StoreScreen(
 
     // 7. RESTAURANT INFO SHEET
     if (showRestaurantInfo) {
-        RestaurantInfoSheet(
+        StoreInfo(
             data = data,
             onDismiss = { showRestaurantInfo = false }
         )

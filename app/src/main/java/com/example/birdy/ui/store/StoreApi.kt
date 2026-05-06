@@ -41,11 +41,14 @@ fun parseStoreJson(root: JSONObject): StoreData {
     // Parse operating_hours if present
     val operatingHours = parseOperatingHours(locObj.optJSONObject("operating_hours"))
 
+    val phone = locObj.optString("phone", "").ifEmpty { null }
+
     val locationInfo = StoreLocationInfo(
         distance = locObj.optString("distance", ""),
         delivery_fee = locObj.optDouble("delivery_fee", 2.99),
         delivery_time_est = locObj.optString("delivery_time", "20-35 min"),
         address = locObj.optString("address", ""),
+        phone = phone,
         operating_hours = operatingHours,
         latitude = locObj.optDouble("latitude", 0.0),
         longitude = locObj.optDouble("longitude", 0.0)

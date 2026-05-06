@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,8 +38,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
 import com.example.birdy.data.InboxData
 import com.example.birdy.data.InboxMessage
+import com.example.birdy.data.Notification
 import com.example.birdy.data.ScheduledRequest
 import com.example.birdy.data.SupportTicket
 
@@ -135,27 +140,134 @@ fun InboxScreen(
     }
 }
 
-// MARK: - Notifications Tab
+// MARK: - Notifications Tab (fetches real notifications from API — matches iOS Inbox.swift)
 
 @Composable
 fun NotificationsTabView(
     modifier: Modifier = Modifier,
     onMessageClick: () -> Unit = {}
 ) {
-    val messages = remember { InboxData.notifications }
+    val context = LocalContext.current
+    var notifications by remember { mutableStateOf<List<Notification>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    // Fetch notifications on first composition — matches iOS .onAppear { fetchNotifications() }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        notifications = InboxData.fetchNotifications(context)
+        isLoading = false
+    }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .background(Color.White)
     ) {
-        messages.forEachIndexed { index, message ->
-            MessageRowView(message = message, onClick = onMessageClick)
-            if (index < messages.size - 1) {
-                HorizontalDivider(
-                    color = Color(0xFFE0E0E0),
-                    thickness = 1.dp,
-                    modifier = Modifier.padding(start = 16.dp)
+        if (isLoading) {
+            // Loading state
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Loading...", color = Color.Gray, fontSize = 15.sp)
+            }
+        } else if (notifications.isEmpty()) {
+            // Empty state
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No notifications yet", color = Color.Gray, fontSize = 15.sp)
+            }
+        } else {
+            notifications.forEachIndexed { index, notification ->
+                NotificationRowView(
+                    notification = notification,
+                    onClick = onMessageClick
+                )
+                if (index < notifications.size - 1) {
+                    HorizontalDivider(
+                        color = Color(0xFFE0E0E0),
+                        thickness = 1.dp,
+                        modifier = Modifier.padding(start = 16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Displays a single notification row — matches iOS notification row in Inbox.swift */
+@Composable
+fun NotificationRowView(notification: Notification, onClick: () -> Unit = {}) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(16.dp)
+    ) {
+        // Icon based on notification type
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Color(0xFFFFA500).copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.ShoppingBag,
+                contentDescription = "Order",
+                tint = Color(0xFFFFA500),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = notification.title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.Black
+            )
+            if (notification.subtitle.isNotEmpty()) {
+                Text(
+                    text = notification.subtitle,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.Gray,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = notification.timeAgo,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color.Gray
+            )
+            if (!notification.isRead) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFCC5500))
                 )
             }
         }
