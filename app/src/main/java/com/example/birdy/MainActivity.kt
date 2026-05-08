@@ -34,6 +34,7 @@ import com.example.birdy.ui.explore.CartScreen
 import com.example.birdy.ui.explore.CheckoutScreen
 import com.example.birdy.ui.explore.DriverTrackingScreen
 import com.example.birdy.ui.fooddelivery.HomeFDScreen
+import com.example.birdy.ui.fooddelivery.OrderDetailScreen
 import com.example.birdy.ui.inbox.InboxScreen
 import com.example.birdy.ui.inbox.RequestDetailScreen
 import com.example.birdy.ui.theme.BirdyTheme
@@ -225,6 +226,15 @@ fun BirdyApp() {
             DriverTrackingScreen(
                 onBack = {
                     CartManager.showDriverTracking = false
+                }
+            )
+        }
+
+        // Full-screen order detail overlay — matches iOS .fullScreenCover for OrderDetail
+        if (CartManager.showOrderDetail) {
+            OrderDetailScreen(
+                onBack = {
+                    CartManager.showOrderDetail = false
                 }
             )
         }

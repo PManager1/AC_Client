@@ -50,12 +50,14 @@ fun HomeFDScreen(
 
     // API-driven data
     var homeFeed by remember { mutableStateOf<HomeFeedData?>(null) }
+    var isLoadingFeed by remember { mutableStateOf(true) }
 
     // Fetch home feed from API on appear
     LaunchedEffect(Unit) {
         withContext(Dispatchers.IO) {
             homeFeed = HomeFDData.fetchHomeFeed()
         }
+        isLoadingFeed = false
         if (homeFeed != null) {
             println("✅ [HomeFDScreen] Loaded home feed: ${homeFeed!!.featuredBanners.size} banners, ${homeFeed!!.sections.size} sections")
         } else {
@@ -101,18 +103,25 @@ fun HomeFDScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // MARK: - Featured Banners (from API)
-            homeFeed?.featuredBanners?.let { banners ->
-                banners.forEach { banner ->
+            // MARK: - Featured Banners or Skeleton
+            if (isLoadingFeed) {
+                SkeletonPromoBanner(modifier = Modifier.padding(horizontal = 16.dp))
+            } else {
+                homeFeed?.featuredBanners?.forEach { banner ->
                     DynamicPromoBannerView(
                         banner = banner,
                         modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
+            }
 
-                Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-                // MARK: - Dynamic Sections (from API)
+            // MARK: - Dynamic Sections or Skeletons
+            if (isLoadingFeed) {
+                SkeletonFeedSection(modifier = Modifier.padding(horizontal = 0.dp))
+                SkeletonFeedSection(modifier = Modifier.padding(horizontal = 0.dp))
+            } else {
                 homeFeed?.sections?.forEach { section ->
                     FeedRestaurantSection(
                         title = section.heading,
@@ -122,9 +131,9 @@ fun HomeFDScreen(
 
                     Spacer(modifier = Modifier.height(24.dp))
                 }
-
-                Spacer(modifier = Modifier.height(60.dp))
             }
+
+            Spacer(modifier = Modifier.height(60.dp))
         }
 
         // MARK: - Address Selection Sheet

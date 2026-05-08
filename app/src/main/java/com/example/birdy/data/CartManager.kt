@@ -32,6 +32,9 @@ object CartManager {
     // Bridge to present driver tracking map — matches iOS CartManager.shared.showDriverTracking
     var showDriverTracking by mutableStateOf(false)
 
+    // Bridge to present order detail screen — matches iOS CartManager.shared.showOrderDetail
+    var showOrderDetail by mutableStateOf(false)
+
     val subtotal: Double
         get() = items.sumOf { it.price * it.quantity }
 

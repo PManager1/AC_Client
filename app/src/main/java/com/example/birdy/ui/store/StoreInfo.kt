@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -134,10 +135,33 @@ fun StoreInfo(
         Spacer(modifier = Modifier.height(12.dp))
 
         // 2. MAP VIEW — static Mapbox map with restaurant pin
-        val lat = data.location_info.latitude
-        val lng = data.location_info.longitude
-        if (lat != 0.0 && lng != 0.0) {
-            val restaurantPoint = Point.fromLngLat(lng, lat)
+        var mapLat by remember { mutableStateOf(data.location_info.latitude) }
+        var mapLng by remember { mutableStateOf(data.location_info.longitude) }
+        val context = LocalContext.current
+
+        // Geocode address if lat/lng are missing
+        LaunchedEffect(data.location_info.address) {
+            if (mapLat == 0.0 || mapLng == 0.0) {
+                try {
+                    val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+                    val results = geocoder.getFromLocationName(data.location_info.address, 1)
+                    if (!results.isNullOrEmpty()) {
+                        mapLat = results[0].latitude
+                        mapLng = results[0].longitude
+                        android.util.Log.d("StoreInfo", "📍 Geocoded: ${data.location_info.address} → lat=$mapLat, lng=$mapLng")
+                    } else {
+                        android.util.Log.w("StoreInfo", "⚠️ Geocoder returned no results for: ${data.location_info.address}")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("StoreInfo", "❌ Geocoding error: ${e.message}")
+                }
+            }
+        }
+
+        android.util.Log.d("StoreInfo", "📍 Map check: lat=$mapLat, lng=$mapLng")
+        if (mapLat != 0.0 && mapLng != 0.0) {
+            android.util.Log.d("StoreInfo", "✅ Creating map with lat=$mapLat, lng=$mapLng")
+            val restaurantPoint = Point.fromLngLat(mapLng, mapLat)
 
             Box(
                 modifier = Modifier
@@ -158,13 +182,16 @@ fun StoreInfo(
                                     .zoom(15.0)
                                     .build()
                             )
-                            mapboxMap.loadStyle("mapbox://styles/mapbox/streets-v18") { style ->
+                            android.util.Log.d("StoreInfo", "🗺️ About to load Mapbox style...")
+                            mapboxMap.loadStyle("mapbox://styles/mapbox/streets-v12") { style ->
+                                android.util.Log.d("StoreInfo", "✅ Mapbox style loaded successfully!")
                                 val annotationPlugin = mapView.annotations
                                 val pointAnnotationManager = annotationPlugin.createPointAnnotationManager()
                                 val annotationOptions = PointAnnotationOptions()
                                     .withPoint(restaurantPoint)
                                 pointAnnotationManager.create(annotationOptions)
                             }
+                            android.util.Log.d("StoreInfo", "⚠️ Style load callback not yet called — map view created")
                             mapView.gestures.updateSettings {
                                 scrollEnabled = false
                                 pinchToZoomEnabled = false
