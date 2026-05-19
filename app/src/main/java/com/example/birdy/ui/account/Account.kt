@@ -1,5 +1,9 @@
 package com.example.birdy.ui.account
 
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,7 +28,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Diamond
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
@@ -37,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -162,17 +167,25 @@ fun AccountScreen(
                     .verticalScroll(rememberScrollState())
             ) {
                 // MARK: - Profile Section
-                ProfileCard(
-                    name = displayName,
-                    rating = 4.95f,
-                    isLoggedIn = isLoggedIn,
-                    profileImageUrl = profileImageUrl,
-                    onClick = {
-                        if (isLoggedIn) {
-                            currentPage = AccountPage.Profile
+                val isProfileLoaded = remember(refreshKey) {
+                    AuthManager.isLoggedIn(context) && AuthManager.getUserFirstName().isNotBlank()
+                }
+
+                if (isProfileLoaded) {
+                    ProfileCard(
+                        name = displayName,
+                        rating = 4.95f,
+                        isLoggedIn = isLoggedIn,
+                        profileImageUrl = profileImageUrl,
+                        onClick = {
+                            if (isLoggedIn) {
+                                currentPage = AccountPage.Profile
+                            }
                         }
-                    }
-                )
+                    )
+                } else {
+                    ProfileSkeletonCard()
+                }
 
                 Spacer(modifier = Modifier.height(20.dp))
 
@@ -185,7 +198,7 @@ fun AccountScreen(
                 ) {
                     ActionButton(
                         title = "Help",
-                        icon = Icons.Default.HelpOutline,
+                        icon = Icons.AutoMirrored.Filled.HelpOutline,
                         onClick = { currentPage = AccountPage.Help },
                         modifier = Modifier.weight(1f)
                     )
@@ -271,6 +284,75 @@ fun AccountScreen(
                 }
 
                 Spacer(modifier = Modifier.height(80.dp))
+            }
+        }
+    }
+}
+
+// MARK: - Profile Skeleton Card (shimmer loading)
+
+@Composable
+fun ProfileSkeletonCard() {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val shimmerAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200),
+        ),
+        label = "shimmerAlpha"
+    )
+
+    Surface(
+        shape = RoundedCornerShape(15.dp),
+        color = Color.White,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(16.dp)
+        ) {
+            // Skeleton avatar
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(Color.Gray.copy(alpha = shimmerAlpha))
+            )
+
+            Spacer(modifier = Modifier.width(15.dp))
+
+            Column {
+                // Skeleton name
+                Box(
+                    modifier = Modifier
+                        .size(width = 150.dp, height = 28.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color.Gray.copy(alpha = shimmerAlpha))
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Skeleton rating
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color.Gray.copy(alpha = shimmerAlpha))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(width = 60.dp, height = 20.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.Gray.copy(alpha = shimmerAlpha))
+                    )
+                }
             }
         }
     }
