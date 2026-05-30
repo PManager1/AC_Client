@@ -239,7 +239,6 @@ fun StoreInfo(
 
         // PHONE SECTION (matches iOS — shown between Address and Hours)
         if (!data.location_info.phone.isNullOrEmpty()) {
-            val context = LocalContext.current
             Column(
                 modifier = Modifier.padding(horizontal = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)

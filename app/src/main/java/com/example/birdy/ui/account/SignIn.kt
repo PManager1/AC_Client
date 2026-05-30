@@ -77,13 +77,15 @@ fun SignInScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(OrangeSec5)
-            .padding(16.dp),
+            .background(Color.White)
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Close button (top-right)
+        // Close button (top-right, flush to corner)
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 0.dp),
             horizontalArrangement = Arrangement.End
         ) {
             IconButton(onClick = onBack) {

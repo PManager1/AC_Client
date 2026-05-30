@@ -37,6 +37,8 @@ import com.example.birdy.ui.explore.CheckoutScreen
 import com.example.birdy.ui.explore.DriverTrackingScreen
 import com.example.birdy.ui.fooddelivery.HomeFDScreen
 import com.example.birdy.ui.fooddelivery.OrderDetailScreen
+import com.example.birdy.ui.home.FastFoodHomeScreen
+import com.example.birdy.ui.home.PizzaHomeScreen
 import com.example.birdy.ui.inbox.InboxScreen
 import com.example.birdy.ui.inbox.RequestDetailScreen
 import com.example.birdy.ui.theme.BirdyTheme
@@ -81,6 +83,8 @@ fun BirdyApp() {
     var showCart by remember { mutableStateOf(false) }
     var showCheckout by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf<ExploreCategory?>(null) }
+    var showPizzaHome by remember { mutableStateOf(false) }
+    var showFastFoodHome by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Force update check
@@ -111,6 +115,8 @@ fun BirdyApp() {
                     showFoodPlaces = false
                     showStore = false
                     selectedCategory = null
+                    showPizzaHome = false
+                    showFastFoodHome = false
                 }
             )
         }
@@ -124,6 +130,24 @@ fun BirdyApp() {
             when (selectedTab) {
                 TAB_HOME -> {
                     when {
+                        showFastFoodHome -> {
+                            FastFoodHomeScreen(
+                                onBack = { showFastFoodHome = false },
+                                onRestaurantClick = { restaurantId ->
+                                    selectedRestaurantId = restaurantId
+                                    showStore = true
+                                }
+                            )
+                        }
+                        showPizzaHome -> {
+                            PizzaHomeScreen(
+                                onBack = { showPizzaHome = false },
+                                onRestaurantClick = { restaurantId ->
+                                    selectedRestaurantId = restaurantId
+                                    showStore = true
+                                }
+                            )
+                        }
                         showCart -> {
                             CartScreen(
                                 onBack = { showCart = false },
@@ -154,7 +178,11 @@ fun BirdyApp() {
                                     showStore = true
                                 },
                                 onCategoryClick = { categoryName ->
-                                    // TODO: Navigate to category results
+                                    if (categoryName == "Pizza") {
+                                        showPizzaHome = true
+                                    } else if (categoryName == "Fast Food") {
+                                        showFastFoodHome = true
+                                    }
                                 }
                             )
                         }

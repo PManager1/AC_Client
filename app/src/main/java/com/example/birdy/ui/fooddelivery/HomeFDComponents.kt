@@ -77,7 +77,7 @@ fun HomeFDHeader(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp)
     ) {
         // Address section
         Row(
@@ -102,7 +102,7 @@ fun HomeFDHeader(
             } else {
                 Text(
                     text = selectedAddress ?: "Select Address",
-                    fontSize = 17.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (selectedAddress != null) Color.Black else Color.Gray,
                     maxLines = 1

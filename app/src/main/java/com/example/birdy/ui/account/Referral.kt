@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.core.net.toUri
 import android.provider.ContactsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -153,7 +154,7 @@ fun ReferralScreen(
                 }
             }
             if (phoneNumbers.isNotEmpty()) {
-                val smsIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("sms:${phoneNumbers.joinToString(",")}")).apply {
+                val smsIntent = Intent(Intent.ACTION_SENDTO, "sms:${phoneNumbers.joinToString(",")}".toUri()).apply {
                     putExtra("sms_body", inviteMessage)
                 }
                 try {
