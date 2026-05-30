@@ -169,6 +169,7 @@ fun BirdyApp() {
                                 onViewCart = { showCart = true },
                                 restaurantId = selectedRestaurantId,
                                 storeName = selectedStoreName,
+                                isGrocery = selectedIsGrocery,
                                 jsonInputStream = if (selectedRestaurantId.isEmpty()) context.assets.open("storejson.json") else null
                             )
                         }
@@ -184,12 +185,6 @@ fun BirdyApp() {
                                     selectedRestaurantId = restaurantId
                                     selectedStoreName = ""
                                     selectedIsGrocery = false
-                                    showStore = true
-                                },
-                                onGroceryStoreClick = { storeId, storeName ->
-                                    selectedRestaurantId = storeId
-                                    selectedStoreName = storeName
-                                    selectedIsGrocery = true
                                     showStore = true
                                 },
                                 onGroceryStoreClick = { storeId, storeName ->
@@ -235,6 +230,7 @@ fun BirdyApp() {
                                 onBack = { showStore = false },
                                 onViewCart = { showCart = true },
                                 restaurantId = selectedRestaurantId,
+                                isGrocery = selectedIsGrocery,
                                 jsonInputStream = if (selectedRestaurantId.isEmpty()) context.assets.open("storejson.json") else null
                             )
                         }
