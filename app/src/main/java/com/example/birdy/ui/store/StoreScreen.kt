@@ -24,7 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -363,7 +363,7 @@ fun StoreScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    HeaderCircleButton(icon = Icons.Default.Close, onClick = onBack)
+                    HeaderCircleButton(icon = Icons.AutoMirrored.Filled.ArrowBack, onClick = onBack)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         HeaderCircleButton(icon = Icons.Default.Search) { onSearchClick?.invoke() }
                         HeaderCircleButton(icon = Icons.Default.FavoriteBorder) { /* TODO */ }
