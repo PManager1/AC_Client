@@ -359,7 +359,7 @@ fun CheckoutScreen(
 
                     Text(
                         text = if (isPlacingOrder) "Placing Order..." else "Place Order • $${String.format("%.2f", totalWithTip)}",
-                        fontSize = 17.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
                         modifier = Modifier
@@ -377,7 +377,7 @@ fun CheckoutScreen(
                                     handlePlaceOrder()
                                 }
                             }
-                            .padding(vertical = 16.dp),
+                            .padding(vertical = 10.dp),
                         textAlign = TextAlign.Center
                     )
                 }

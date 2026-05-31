@@ -295,18 +295,18 @@ private fun CartListView(onCheckout: () -> Unit = {}) {
             // Proceed to Checkout button
             Text(
                 text = "Proceed to Checkout • $${String.format("%.2f", CartManager.total)}",
-                fontSize = 17.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
                     .background(
-                        Color(0xFF4CAF50),
+                        Color(0xFFCC5500),
                         RoundedCornerShape(10.dp)
                     )
                     .clickable { onCheckout() }
-                    .padding(vertical = 16.dp),
+                    .padding(vertical = 10.dp),
                 textAlign = TextAlign.Center
             )
 
