@@ -29,6 +29,10 @@ object CartManager {
     var restaurantId by mutableStateOf("")
     var restaurantName by mutableStateOf("")
 
+    // Order ID from backend — matches iOS CartManager.shared.orderId
+    var orderId by mutableStateOf("")
+    var orderNumber by mutableStateOf(0)
+
     // Bridge to present driver tracking map — matches iOS CartManager.shared.showDriverTracking
     var showDriverTracking by mutableStateOf(false)
 

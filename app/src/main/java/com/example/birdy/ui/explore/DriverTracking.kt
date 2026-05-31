@@ -31,7 +31,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Email
@@ -299,7 +299,7 @@ fun DriverTrackingScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
                         tint = Color(0xFF191970), // orangeSecNavyBlue
                         modifier = Modifier.size(20.dp)
@@ -443,38 +443,93 @@ fun DriverTrackingScreen(
 }
 
 // MARK: - Google Map Composable (matches iOS DriverPositionMapView)
+// Wraps MapView in try-catch so a missing/invalid Google Maps API key
+// shows a fallback UI instead of crashing the app (iOS Mapbox handles this gracefully).
 @Composable
 fun DriverPositionGoogleMap(
     onMapReady: (GoogleMap) -> Unit,
     onUserLocationUpdated: (LatLng) -> Unit
 ) {
     val context = LocalContext.current
-    val mapView = remember { MapView(context) }
+    var mapInitError by remember { mutableStateOf(false) }
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+
+    if (mapInitError) {
+        // Fallback UI when Google Maps fails to initialize (bad/missing API key)
+        // Matches iOS behavior where Mapbox gracefully shows blank map
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFFE8E8E8)),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = null,
+                    tint = Color.Gray,
+                    modifier = Modifier.size(48.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Map unavailable",
+                    fontSize = 16.sp,
+                    color = Color.Gray,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "Driver tracking is active",
+                    fontSize = 13.sp,
+                    color = Color.Gray.copy(alpha = 0.7f)
+                )
+            }
+        }
+        return
+    }
+
+    val mapView = remember {
+        try {
+            MapView(context)
+        } catch (e: Exception) {
+            Log.e("ShowDriverPosition", "❌ MapView creation failed: ${e.message}")
+            null
+        }
+    }
+
+    if (mapView == null) {
+        mapInitError = true
+        return
+    }
 
     AndroidView(
         factory = { factoryContext ->
-            mapView.apply {
-                onCreate(null)
-                getMapAsync { map ->
-                    // Enable user location blue dot
-                    if (ContextCompat.checkSelfPermission(factoryContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                        map.isMyLocationEnabled = true
+            try {
+                mapView.apply {
+                    onCreate(null)
+                    getMapAsync { map ->
+                        // Enable user location blue dot
+                        if (ContextCompat.checkSelfPermission(factoryContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                            map.isMyLocationEnabled = true
+                        }
+
+                        // Camera: center on DC area initially (matches iOS)
+                        val dcCenter = LatLng(38.9072, -77.0369)
+                        map.moveCamera(CameraUpdateFactory.newCameraPosition(
+                            CameraPosition.fromLatLngZoom(dcCenter, 12f)
+                        ))
+
+                        // Map styling — light/clean look
+                        map.uiSettings.isMyLocationButtonEnabled = false
+                        map.uiSettings.isZoomControlsEnabled = false
+                        map.uiSettings.isMapToolbarEnabled = false
+
+                        onMapReady(map)
                     }
-
-                    // Camera: center on DC area initially (matches iOS)
-                    val dcCenter = LatLng(38.9072, -77.0369)
-                    map.moveCamera(CameraUpdateFactory.newCameraPosition(
-                        CameraPosition.fromLatLngZoom(dcCenter, 12f)
-                    ))
-
-                    // Map styling — light/clean look
-                    map.uiSettings.isMyLocationButtonEnabled = false
-                    map.uiSettings.isZoomControlsEnabled = false
-                    map.uiSettings.isMapToolbarEnabled = false
-
-                    onMapReady(map)
                 }
+            } catch (e: Exception) {
+                Log.e("ShowDriverPosition", "❌ MapView factory failed: ${e.message}")
+                mapInitError = true
+                mapView
             }
         },
         modifier = Modifier.fillMaxSize()
@@ -482,7 +537,9 @@ fun DriverPositionGoogleMap(
 
     // Track user location via FusedLocationProviderClient (matches iOS CLLocationManager)
     DisposableEffect(Unit) {
-        mapView.onResume()
+        if (!mapInitError) {
+            mapView.onResume()
+        }
 
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L).build()
 
@@ -495,14 +552,16 @@ fun DriverPositionGoogleMap(
             }
         }
 
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+        if (!mapInitError && ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
         }
 
         onDispose {
             fusedLocationClient.removeLocationUpdates(locationCallback)
-            mapView.onPause()
-            mapView.onDestroy()
+            if (!mapInitError) {
+                mapView.onPause()
+                mapView.onDestroy()
+            }
         }
     }
 }

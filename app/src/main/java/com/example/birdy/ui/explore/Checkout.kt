@@ -209,8 +209,12 @@ fun CheckoutScreen(
                 if (responseCode == 201 || responseCode == 200) {
                     val responseBody = connection.inputStream.bufferedReader().readText()
                     val json = JSONObject(responseBody)
-                    val orderNumber = json.optString("orderNumber", "")
-                    println("✅ [Checkout] Order created! Order number: $orderNumber")
+                    val orderId = json.optString("_id", "")
+                    val orderNumber = json.optInt("orderNumber", 0)
+                    // Save to CartManager — matches iOS CartManager.shared.orderId / orderNumber
+                    CartManager.orderId = orderId
+                    CartManager.orderNumber = orderNumber
+                    println("✅ [Checkout] Order created! ID: $orderId, Number: $orderNumber")
                     "success"
                 } else {
                     val errorBody = connection.errorStream?.bufferedReader()?.readText() ?: "Unknown error"

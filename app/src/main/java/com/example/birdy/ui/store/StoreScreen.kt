@@ -564,7 +564,7 @@ fun StoreScreen(
                                 .fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            val cardW = if (isGrocery) 140.dp else 180.dp
+                            val cardW = if (isGrocery) 172.dp else 190.dp
                             category.items.forEach { item ->
                                 StoreFoodCard(
                                     menuItem = item,

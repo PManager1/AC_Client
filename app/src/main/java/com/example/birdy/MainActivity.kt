@@ -147,7 +147,6 @@ fun BirdyApp() {
                                     }
                                 )
                             }
-
                             showPizzaHome -> {
                                 PizzaHomeScreen(
                                     onBack = { showPizzaHome = false },
@@ -158,16 +157,15 @@ fun BirdyApp() {
                                     }
                                 )
                             }
-
                             showCheckout -> {
                                 CheckoutScreen(
                                     onBack = { showCheckout = false },
                                     onTrackOrder = {
                                         showCheckout = false
+                                        showCart = false
                                     }
                                 )
                             }
-
                             showCart -> {
                                 CartScreen(
                                     onBack = { showCart = false },
@@ -177,7 +175,6 @@ fun BirdyApp() {
                                     }
                                 )
                             }
-
                             showStore -> {
                                 StoreScreen(
                                     onBack = { showStore = false },
@@ -185,12 +182,9 @@ fun BirdyApp() {
                                     restaurantId = selectedRestaurantId,
                                     storeName = selectedStoreName,
                                     isGrocery = selectedIsGrocery,
-                                    jsonInputStream = if (selectedRestaurantId.isEmpty()) context.assets.open(
-                                        "storejson.json"
-                                    ) else null
+                                    jsonInputStream = if (selectedRestaurantId.isEmpty()) context.assets.open("storejson.json") else null
                                 )
                             }
-
                             else -> {
                                 HomeFDScreen(
                                     onNavigateToSearch = {
@@ -230,11 +224,11 @@ fun BirdyApp() {
                                     onBack = { showCheckout = false },
                                     onTrackOrder = {
                                         showCheckout = false
+                                        showCart = false
                                         // CartManager.showDriverTracking is already set to true
                                     }
                                 )
                             }
-
                             showCart -> {
                                 CartScreen(
                                     onBack = { showCart = false },
@@ -244,19 +238,15 @@ fun BirdyApp() {
                                     }
                                 )
                             }
-
                             showStore -> {
                                 StoreScreen(
                                     onBack = { showStore = false },
                                     onViewCart = { showCart = true },
                                     restaurantId = selectedRestaurantId,
                                     isGrocery = selectedIsGrocery,
-                                    jsonInputStream = if (selectedRestaurantId.isEmpty()) context.assets.open(
-                                        "storejson.json"
-                                    ) else null
+                                    jsonInputStream = if (selectedRestaurantId.isEmpty()) context.assets.open("storejson.json") else null
                                 )
                             }
-
                             showSearchFood -> {
                                 SearchFoodScreen(
                                     onBack = { showSearchFood = false },
@@ -266,7 +256,6 @@ fun BirdyApp() {
                                     }
                                 )
                             }
-
                             showFoodPlaces && selectedCategory != null -> {
                                 NewFoodPlacesScreen(
                                     category = selectedCategory!!.title,
@@ -281,7 +270,6 @@ fun BirdyApp() {
                                     }
                                 )
                             }
-
                             else -> {
                                 ExploreScreen(
                                     onNavigateToSearch = { showSearchFood = true },
@@ -309,37 +297,38 @@ fun BirdyApp() {
                     TAB_ACCOUNT -> AccountScreen()
                 }
             }
+        }
 
-            // Full-screen driver tracking overlay — matches iOS .fullScreenCover for DriverTracking
-            if (CartManager.showDriverTracking) {
-                DriverTrackingScreen(
-                    onBack = {
-                        CartManager.showDriverTracking = false
-                    }
-                )
-            }
+        // Full-screen driver tracking overlay — matches iOS .fullScreenCover for DriverTracking
+        // Rendered OUTSIDE Scaffold so it covers the entire screen including bottom nav
+        if (CartManager.showDriverTracking) {
+            DriverTrackingScreen(
+                onBack = {
+                    CartManager.showDriverTracking = false
+                }
+            )
+        }
 
-            // Full-screen order detail overlay — matches iOS .fullScreenCover for OrderDetail
-            if (CartManager.showOrderDetail) {
-                OrderDetailScreen(
-                    onBack = {
-                        CartManager.showOrderDetail = false
-                    }
-                )
-            }
+        // Full-screen order detail overlay — matches iOS .fullScreenCover for OrderDetail
+        if (CartManager.showOrderDetail) {
+            OrderDetailScreen(
+                onBack = {
+                    CartManager.showOrderDetail = false
+                }
+            )
         }
     }
+}
 
-    @Preview(showBackground = true)
-    @Composable
-    fun BirdyAppPreview() {
-        BirdyTheme {
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color.White
-            ) {
-                BirdyApp()
-            }
+@Preview(showBackground = true)
+@Composable
+fun BirdyAppPreview() {
+    BirdyTheme {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color.White
+        ) {
+            BirdyApp()
         }
     }
 }
