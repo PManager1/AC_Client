@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
 }
 
 // Load secrets from local.properties
@@ -90,9 +91,10 @@ dependencies {
     // Mapbox Maps SDK
     implementation("com.mapbox.maps:android:11.7.1")
 
-    // Firebase Realtime Database
+    // Firebase Realtime Database + Cloud Messaging (Push Notifications)
     implementation(platform("com.google.firebase:firebase-bom:33.13.0"))
     implementation("com.google.firebase:firebase-database-ktx")
+    implementation("com.google.firebase:firebase-messaging-ktx")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

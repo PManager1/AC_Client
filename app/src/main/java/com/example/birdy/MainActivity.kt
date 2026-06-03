@@ -1,9 +1,15 @@
 package com.example.birdy
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,12 +59,23 @@ private const val TAB_INBOX = 2
 private const val TAB_ACCOUNT = 3
 
 class MainActivity : ComponentActivity() {
+
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        Log.d("MainActivity", "Notification permission granted: $granted")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AuthManager.init(applicationContext)
         // Initialize Stripe SDK — matches iOS AppDelegate stripeInit()
         PaymentConfiguration.init(applicationContext, Config.STRIPE_PUBLISHABLE_KEY)
         enableEdgeToEdge()
+
+        // Request notification permission (Android 13+)
+        requestNotificationPermission()
+
         setContent {
             BirdyTheme {
                 Surface(
@@ -67,6 +84,16 @@ class MainActivity : ComponentActivity() {
                 ) {
                     BirdyApp()
                 }
+            }
+        }
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
     }

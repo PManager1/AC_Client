@@ -1,20 +1,7 @@
 package com.example.birdy.ui.explore
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.LinearGradient
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.Shader
-import android.graphics.Typeface
-import android.os.Looper
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,14 +27,12 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -59,44 +44,33 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import com.example.birdy.BuildConfig
-import com.example.birdy.R
 import com.example.birdy.data.CartManager
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.maps.CameraUpdateFactory
-import com.google.android.gms.maps.GoogleMap
-import com.google.android.gms.maps.MapView
-import com.google.android.gms.maps.model.BitmapDescriptorFactory
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.LatLngBounds
-import com.google.android.gms.maps.model.Marker
-import com.google.android.gms.maps.model.MarkerOptions
-import com.google.android.gms.maps.model.Polyline
-import com.google.android.gms.maps.model.PolylineOptions
+import com.example.birdy.data.Config
+import com.mapbox.geojson.LineString
+import com.mapbox.geojson.Point
+import com.mapbox.maps.CameraOptions
+import com.mapbox.maps.CoordinateBounds
+import com.mapbox.maps.EdgeInsets
+import com.mapbox.maps.MapInitOptions
+import com.mapbox.maps.MapView
+import com.mapbox.maps.plugin.annotation.annotations
+import com.mapbox.maps.plugin.annotation.generated.PointAnnotationManager
+import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
+import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationManager
+import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationOptions
+import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
+import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
+import com.mapbox.maps.plugin.locationcomponent.location
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
 import kotlinx.coroutines.CoroutineScope
@@ -107,7 +81,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
-import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 
@@ -115,10 +88,9 @@ import kotlin.math.min
 private var lastRouteFetchTimeMs: Long = 0L
 private var isFetchingRoute: Boolean = false
 
-// MARK: - ShowDriverPositionScreen — Matches iOS ShowDriverPosition
+// MARK: - DriverTrackingScreen — Matches iOS DriverTracking.swift
+// Uses Mapbox Maps (same as iOS) to avoid Google Play Services issues.
 // Listens to Firebase Realtime Database for driver location and shows it on the map.
-// Camera auto-fits to show both the user's blue dot and the driver's orange dot.
-// Draws a road-following route line between driver and user via Google Maps Directions API.
 
 @Composable
 fun DriverTrackingScreen(
@@ -140,17 +112,17 @@ fun DriverTrackingScreen(
     // Options menu
     var showOptionsMenu by remember { mutableStateOf(false) }
 
-    // Google Map reference
-    var googleMap by remember { mutableStateOf<GoogleMap?>(null) }
-    var driverMarker by remember { mutableStateOf<Marker?>(null) }
-    var routePolyline by remember { mutableStateOf<Polyline?>(null) }
+    // Mapbox Map references
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
+    var pointAnnotationManager by remember { mutableStateOf<PointAnnotationManager?>(null) }
+    var polylineAnnotationManager by remember { mutableStateOf<PolylineAnnotationManager?>(null) }
 
     // User location
-    var userLocation by remember { mutableStateOf<LatLng?>(null) }
+    var userLocation by remember { mutableStateOf<Point?>(null) }
     var hasCenteredOnBoth by remember { mutableStateOf(false) }
 
     // Interpolation state for smooth driver movement
-    var currentDisplayCoord by remember { mutableStateOf<LatLng?>(null) }
+    var currentDisplayPoint by remember { mutableStateOf<Point?>(null) }
     val coroutineScope = rememberCoroutineScope()
     var interpolationJob by remember { mutableStateOf<Job?>(null) }
     var lastFirebaseUpdateTime by remember { mutableStateOf(0L) }
@@ -165,7 +137,7 @@ fun DriverTrackingScreen(
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 val value = snapshot.value as? Map<*, *> ?: run {
-                    Log.w("ShowDriverPosition", "⚠️ No driver location data found")
+                    Log.w("DriverTracking", "⚠️ No driver location data found")
                     return
                 }
 
@@ -179,83 +151,82 @@ fun DriverTrackingScreen(
                 driverSpeed = value["speed"] as? Double ?: 0.0
                 isDriverActive = value["isActive"] as? Boolean ?: false
 
-                Log.d("ShowDriverPosition", "📍 Driver location updated: $lat, $lng | bearing: $driverBearing | speed: $driverSpeed")
+                Log.d("DriverTracking", "📍 Driver location updated: $lat, $lng | bearing: $driverBearing | speed: $driverSpeed")
             }
 
             override fun onCancelled(error: DatabaseError) {
-                Log.e("ShowDriverPosition", "❌ Firebase listener cancelled: ${error.message}")
+                Log.e("DriverTracking", "❌ Firebase listener cancelled: ${error.message}")
             }
         }
 
         ref.addValueEventListener(listener)
         firebaseListener = listener
-        Log.d("ShowDriverPosition", "🔥 Started listening to Firebase: active_rides/test-ride/location")
+        Log.d("DriverTracking", "🔥 Started listening to Firebase: active_rides/test-ride/location")
 
         onDispose {
             ref.removeEventListener(listener)
             firebaseListener = null
             interpolationJob?.cancel()
-            Log.d("ShowDriverPosition", "🔥 Stopped listening to Firebase driver location")
+            Log.d("DriverTracking", "🔥 Stopped listening to Firebase driver location")
         }
     }
 
     // MARK: - Handle driver location updates on the map
-    LaunchedEffect(driverLat, driverLng, hasDriverLocation, googleMap) {
-        if (!hasDriverLocation || driverLat == 0.0 || driverLng == 0.0 || googleMap == null) return@LaunchedEffect
-        val map = googleMap ?: return@LaunchedEffect
-        val newCoord = LatLng(driverLat, driverLng)
+    LaunchedEffect(driverLat, driverLng, hasDriverLocation, pointAnnotationManager) {
+        if (!hasDriverLocation || driverLat == 0.0 || driverLng == 0.0) return@LaunchedEffect
+        val ptMgr = pointAnnotationManager ?: return@LaunchedEffect
+        val mapView = mapViewRef ?: return@LaunchedEffect
+        val newPoint = Point.fromLngLat(driverLng, driverLat)
 
-        if (currentDisplayCoord == null) {
+        if (currentDisplayPoint == null) {
             // First location — snap immediately (no interpolation)
-            currentDisplayCoord = newCoord
+            currentDisplayPoint = newPoint
             lastFirebaseUpdateTime = System.currentTimeMillis()
 
             // Place marker immediately
-            driverMarker?.remove()
-            driverMarker = map.addMarker(
-                MarkerOptions()
-                    .position(newCoord)
-                    .icon(BitmapDescriptorFactory.fromBitmap(createDriverMarkerBitmap(context)))
-                    .anchor(0.5f, 1.0f)
-            )
+            placeDriverMarker(ptMgr, newPoint)
 
             // Fetch route and fit camera
-            handleRouteAndCamera(map, newCoord, userLocation, hasCenteredOnBoth, { hasCenteredOnBoth = true }, context) { newPolyline ->
-                routePolyline?.remove()
-                routePolyline = newPolyline
-            }
+            handleRouteAndCamera(
+                mapView = mapView,
+                driver = newPoint,
+                userLoc = userLocation,
+                hasCentered = hasCenteredOnBoth,
+                onCentered = { hasCenteredOnBoth = true },
+                lineMgr = polylineAnnotationManager
+            )
         } else {
             // Subsequent updates — smooth interpolation
             val now = System.currentTimeMillis()
             val timeSinceLastUpdate = (now - lastFirebaseUpdateTime) / 1000.0
             lastFirebaseUpdateTime = now
 
-            // Dynamic animation duration based on update cadence
-            var animationDuration = 2500L // default 2.5s
+            var animationDuration = 2500L
             if (timeSinceLastUpdate in 0.5..10.0) {
                 animationDuration = (min(max(timeSinceLastUpdate + 0.3, 1.0), 5.0) * 1000).toLong()
             }
 
-            val startCoord = currentDisplayCoord!!
+            val startPoint = currentDisplayPoint!!
             interpolationJob?.cancel()
             interpolationJob = coroutineScope.launch {
                 animateDriverMarker(
-                    map = map,
-                    from = startCoord,
-                    to = newCoord,
+                    ptMgr = ptMgr,
+                    from = startPoint,
+                    to = newPoint,
                     durationMs = animationDuration,
-                    onFrame = { coord ->
-                        currentDisplayCoord = coord
-                    },
-                    markerRef = { driverMarker }
+                    onFrame = { point -> currentDisplayPoint = point }
                 )
             }
 
-            // Fetch route and fit camera using target position
-            handleRouteAndCamera(map, newCoord, userLocation, hasCenteredOnBoth, { hasCenteredOnBoth = true }, context) { newPolyline ->
-                routePolyline?.remove()
-                routePolyline = newPolyline
-            }
+            // Fetch route and fit camera
+            handleRouteAndCamera(
+                mapView = mapView,
+                driver = newPoint,
+                userLoc = userLocation,
+                hasCentered = hasCenteredOnBoth,
+                onCentered = { hasCenteredOnBoth = true },
+                lineMgr = polylineAnnotationManager
+            )
         }
     }
 
@@ -268,14 +239,46 @@ fun DriverTrackingScreen(
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        // Full-screen Google Map
-        DriverPositionGoogleMap(
-            onMapReady = { map ->
-                googleMap = map
+        // Full-screen Mapbox Map (same as iOS DriverPositionMapView)
+        AndroidView(
+            factory = { factoryContext ->
+                MapView(factoryContext, MapInitOptions(
+                    context = factoryContext
+                )).also { mapView ->
+                    val mapboxMap = mapView.getMapboxMap()
+
+                    // Camera: center on DC area initially (matches iOS)
+                    mapboxMap.setCamera(
+                        CameraOptions.Builder()
+                            .center(Point.fromLngLat(-77.0369, 38.9072))
+                            .zoom(12.0)
+                            .build()
+                    )
+
+                    // Load style and set up annotation managers
+                    mapboxMap.loadStyle("mapbox://styles/mapbox/streets-v12") { style ->
+                        Log.d("DriverTracking", "🗺️ Mapbox style loaded")
+
+                        val annotationPlugin = mapView.annotations
+                        pointAnnotationManager = annotationPlugin.createPointAnnotationManager()
+                        polylineAnnotationManager = annotationPlugin.createPolylineAnnotationManager()
+                    }
+
+                    // Show user location puck (blue dot) — matches iOS
+                    try {
+                        val locationPlugin = mapView.location
+                        locationPlugin.updateSettings {
+                            enabled = true
+                            puckBearingEnabled = true
+                        }
+                    } catch (e: Exception) {
+                        Log.w("DriverTracking", "⚠️ Location puck setup: ${e.message}")
+                    }
+
+                    mapViewRef = mapView
+                }
             },
-            onUserLocationUpdated = { location ->
-                userLocation = location
-            }
+            modifier = Modifier.fillMaxSize()
         )
 
         // Floating back button overlay (top-left) + driver status indicator
@@ -302,7 +305,7 @@ fun DriverTrackingScreen(
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
-                        tint = Color(0xFF191970), // orangeSecNavyBlue
+                        tint = Color(0xFF191970),
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -343,7 +346,7 @@ fun DriverTrackingScreen(
                 .fillMaxWidth()
                 .align(Alignment.BottomCenter)
                 .padding(horizontal = 16.dp)
-                .padding(bottom = 8.dp), // matches iOS .padding(.bottom, 8)
+                .padding(bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Dropoff time header
@@ -381,7 +384,7 @@ fun DriverTrackingScreen(
                             )
                             Text(
                                 text = "Heading to 1310 28th St NW",
-                                fontSize = 18.sp, // matches iOS latest: 18 (not 20)
+                                fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.Black,
                                 maxLines = 1,
@@ -443,187 +446,61 @@ fun DriverTrackingScreen(
     }
 }
 
-// MARK: - Google Map Composable (matches iOS DriverPositionMapView)
-// Wraps MapView in try-catch so a missing/invalid Google Maps API key
-// shows a fallback UI instead of crashing the app (iOS Mapbox handles this gracefully).
-@Composable
-fun DriverPositionGoogleMap(
-    onMapReady: (GoogleMap) -> Unit,
-    onUserLocationUpdated: (LatLng) -> Unit
+// MARK: - Place driver marker on Mapbox map
+private fun placeDriverMarker(
+    ptMgr: PointAnnotationManager,
+    point: Point
 ) {
-    val context = LocalContext.current
-
-    // Early check: validate API key BEFORE creating MapView to prevent
-    // Google Play Services from triggering a system dialog that minimizes the app
-    val apiKeyValid = remember {
-        try {
-            val appInfo = context.packageManager.getApplicationInfo(
-                context.packageName,
-                android.content.pm.PackageManager.GET_META_DATA
-            )
-            val key = appInfo.metaData.getString("com.google.android.geo.API_KEY") ?: ""
-            key.isNotEmpty() && key != "YOUR_GOOGLE_MAPS_API_KEY_HERE"
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    var mapInitError by remember { mutableStateOf(!apiKeyValid) }
-    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
-
-    if (mapInitError) {
-        // Fallback UI when Google Maps fails to initialize (bad/missing API key)
-        // Matches iOS behavior where Mapbox gracefully shows blank map
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFFE8E8E8)),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = Icons.Default.LocationOn,
-                    contentDescription = null,
-                    tint = Color.Gray,
-                    modifier = Modifier.size(48.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Map unavailable",
-                    fontSize = 16.sp,
-                    color = Color.Gray,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "Driver tracking is active",
-                    fontSize = 13.sp,
-                    color = Color.Gray.copy(alpha = 0.7f)
-                )
-            }
-        }
-        return
-    }
-
-    val mapView = remember {
-        try {
-            MapView(context)
-        } catch (e: Exception) {
-            Log.e("ShowDriverPosition", "❌ MapView creation failed: ${e.message}")
-            null
-        }
-    }
-
-    if (mapView == null) {
-        mapInitError = true
-        return
-    }
-
-    AndroidView(
-        factory = { factoryContext ->
-            try {
-                mapView.apply {
-                    onCreate(null)
-                    getMapAsync { map ->
-                        // Enable user location blue dot
-                        if (ContextCompat.checkSelfPermission(factoryContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                            map.isMyLocationEnabled = true
-                        }
-
-                        // Camera: center on DC area initially (matches iOS)
-                        val dcCenter = LatLng(38.9072, -77.0369)
-                        map.moveCamera(CameraUpdateFactory.newCameraPosition(
-                            CameraPosition.fromLatLngZoom(dcCenter, 12f)
-                        ))
-
-                        // Map styling — light/clean look
-                        map.uiSettings.isMyLocationButtonEnabled = false
-                        map.uiSettings.isZoomControlsEnabled = false
-                        map.uiSettings.isMapToolbarEnabled = false
-
-                        onMapReady(map)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("ShowDriverPosition", "❌ MapView factory failed: ${e.message}")
-                mapInitError = true
-                mapView
-            }
-        },
-        modifier = Modifier.fillMaxSize()
-    )
-
-    // Track user location via FusedLocationProviderClient (matches iOS CLLocationManager)
-    DisposableEffect(Unit) {
-        if (!mapInitError) {
-            mapView.onResume()
-        }
-
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L).build()
-
-        val locationCallback = object : LocationCallback() {
-            override fun onLocationResult(locationResult: LocationResult) {
-                locationResult.lastLocation?.let { location ->
-                    val latLng = LatLng(location.latitude, location.longitude)
-                    onUserLocationUpdated(latLng)
-                }
-            }
-        }
-
-        if (!mapInitError && ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper())
-        }
-
-        onDispose {
-            fusedLocationClient.removeLocationUpdates(locationCallback)
-            if (!mapInitError) {
-                mapView.onPause()
-                mapView.onDestroy()
-            }
-        }
-    }
+    ptMgr.deleteAll()
+    val options = PointAnnotationOptions()
+        .withPoint(point)
+    ptMgr.create(options)
 }
 
-// MARK: - Route & Camera handling (shared logic, matches iOS handleRouteAndCamera)
+// MARK: - Route & Camera handling (matches iOS handleRouteAndCamera)
 private fun handleRouteAndCamera(
-    map: GoogleMap,
-    driver: LatLng,
-    userLoc: LatLng?,
+    mapView: MapView,
+    driver: Point,
+    userLoc: Point?,
     hasCentered: Boolean,
     onCentered: () -> Unit,
-    context: android.content.Context,
-    onPolyline: (Polyline?) -> Unit
+    lineMgr: PolylineAnnotationManager?
 ) {
-    val userCoord = userLoc
-    if (userCoord != null) {
+    val mapboxMap = mapView.getMapboxMap()
+
+    if (userLoc != null) {
         // Fetch route and draw line
         CoroutineScope(Dispatchers.Main).launch {
-            fetchRouteAndDrawLine(map, driver, userCoord, context, onPolyline)
+            fetchRouteAndDrawLine(lineMgr, driver, userLoc)
         }
 
         if (!hasCentered) {
-            fitCameraToShowBoth(map, userCoord, driver)
+            fitCameraToShowBoth(mapboxMap, userLoc, driver)
             onCentered()
         }
     } else {
         if (!hasCentered) {
             onCentered()
-            map.moveCamera(CameraUpdateFactory.newCameraPosition(
-                CameraPosition.fromLatLngZoom(driver, 15f)
-            ))
-            Log.d("ShowDriverPosition", "🎯 Camera centered on driver (no user location yet)")
+            mapboxMap.setCamera(
+                CameraOptions.Builder()
+                    .center(driver)
+                    .zoom(15.0)
+                    .build()
+            )
+            Log.d("DriverTracking", "🎯 Camera centered on driver (no user location yet)")
         }
     }
 }
 
-// MARK: - Google Maps Directions API — Fetch Route (matches iOS fetchRouteAndDrawLine)
+// MARK: - Mapbox Directions API — Fetch Route (matches iOS fetchRouteAndDrawLine)
 private suspend fun fetchRouteAndDrawLine(
-    map: GoogleMap,
-    driver: LatLng,
-    user: LatLng,
-    context: android.content.Context,
-    onPolyline: (Polyline?) -> Unit
+    lineMgr: PolylineAnnotationManager?,
+    driver: Point,
+    user: Point
 ) {
-    // Debounce: don't fetch more often than every 15 seconds (module-level state)
+    val manager = lineMgr ?: return
+
+    // Debounce
     val now = System.currentTimeMillis()
     if (now - lastRouteFetchTimeMs < 15000) return
     if (isFetchingRoute) return
@@ -632,156 +509,138 @@ private suspend fun fetchRouteAndDrawLine(
     lastRouteFetchTimeMs = now
 
     try {
-        // Read API key from BuildConfig (injected from local.properties at build time)
-        val apiKey = BuildConfig.GOOGLE_MAPS_API_KEY
+        val accessToken = Config.MAPBOX_ACCESS_TOKEN
 
-        if (apiKey.isEmpty()) {
-            Log.w("ShowDriverPosition", "⚠️ No Google Maps API key — drawing straight line")
+        if (accessToken.isEmpty()) {
+            Log.w("DriverTracking", "⚠️ No Mapbox token — drawing straight line")
             withContext(Dispatchers.Main) {
-                drawStraightLine(map, driver, user, onPolyline)
+                drawStraightLine(manager, driver, user)
             }
             return
         }
 
-        val url = "https://maps.googleapis.com/maps/api/directions/json?" +
-                "origin=${driver.latitude},${driver.longitude}" +
-                "&destination=${user.latitude},${user.longitude}" +
-                "&mode=driving" +
-                "&key=$apiKey"
+        // Mapbox Directions API (same as OrderDetail.kt)
+        val url = "https://api.mapbox.com/directions/v5/mapbox/driving/" +
+                "${driver.longitude()},${driver.latitude()};" +
+                "${user.longitude()},${user.latitude()}?" +
+                "overview=full&geometries=geojson&access_token=$accessToken"
 
         val response = withContext(Dispatchers.IO) { URL(url).readText() }
         val json = JSONObject(response)
 
         if (json.getJSONArray("routes").length() > 0) {
             val route = json.getJSONArray("routes").getJSONObject(0)
-            val overviewPolyline = route.getJSONObject("overview_polyline").getString("points")
-            val legs = route.getJSONArray("legs")
-            val leg = legs.getJSONObject(0)
-            val distanceMeters = leg.getJSONObject("distance").getDouble("value")
-            val durationSeconds = leg.getJSONObject("duration").getDouble("value")
+            val distanceMeters = route.getDouble("distance")
+            val durationSeconds = route.getDouble("duration")
+            val geometry = route.getJSONObject("geometry")
+            val coords = geometry.getJSONArray("coordinates")
 
             val distanceMiles = distanceMeters / 1609.34
             val durationMinutes = durationSeconds / 60
 
-            Log.d("ShowDriverPosition", "✅ Route fetched: ${String.format("%.1f", distanceMiles)} mi, ${String.format("%.0f", durationMinutes)} min")
+            val decoded = mutableListOf<Point>()
+            for (i in 0 until coords.length()) {
+                val coord = coords.getJSONArray(i)
+                decoded.add(Point.fromLngLat(coord.getDouble(0), coord.getDouble(1)))
+            }
 
-            val decodedPoints = decodePolyline(overviewPolyline)
+            Log.d("DriverTracking", "✅ Route fetched: ${String.format("%.1f", distanceMiles)} mi, ~${String.format("%.0f", durationMinutes)} min")
 
             withContext(Dispatchers.Main) {
-                drawRouteLine(map, decodedPoints, onPolyline)
+                drawRouteLine(manager, decoded)
             }
         } else {
-            Log.w("ShowDriverPosition", "⚠️ No routes found — drawing straight line")
+            Log.w("DriverTracking", "⚠️ No routes found — drawing straight line")
             withContext(Dispatchers.Main) {
-                drawStraightLine(map, driver, user, onPolyline)
+                drawStraightLine(manager, driver, user)
             }
         }
     } catch (e: Exception) {
-        Log.e("ShowDriverPosition", "❌ Directions API error: ${e.message}")
+        Log.e("DriverTracking", "❌ Directions API error: ${e.message}")
         withContext(Dispatchers.Main) {
-            drawStraightLine(map, driver, user, onPolyline)
+            drawStraightLine(manager, driver, user)
         }
     } finally {
         isFetchingRoute = false
     }
 }
 
-// MARK: - Decode Google Maps polyline (encoded polyline algorithm)
-private fun decodePolyline(encoded: String): List<LatLng> {
-    val points = mutableListOf<LatLng>()
-    var index = 0
-    var lat = 0
-    var lng = 0
-
-    while (index < encoded.length) {
-        var result = 0
-        var shift = 0
-        var b: Int
-        do {
-            b = encoded[index++].code - 63
-            result = result or (b and 0x1f shl shift)
-            shift += 5
-        } while (b >= 0x20)
-        val dlat = if (result and 1 != 0) (result shr 1).inv() else result shr 1
-        lat += dlat
-
-        result = 0
-        shift = 0
-        do {
-            b = encoded[index++].code - 63
-            result = result or (b and 0x1f shl shift)
-            shift += 5
-        } while (b >= 0x20)
-        val dlng = if (result and 1 != 0) (result shr 1).inv() else result shr 1
-        lng += dlng
-
-        points.add(LatLng(lat / 1E6.toDouble(), lng / 1E6.toDouble()))
-    }
-    return points
-}
-
-// MARK: - Draw Route Line (road-following) (matches iOS drawRouteLine)
+// MARK: - Draw Route Line (road-following) on Mapbox (matches iOS drawRouteLine)
 private fun drawRouteLine(
-    map: GoogleMap,
-    coordinates: List<LatLng>,
-    onPolyline: (Polyline?) -> Unit
+    manager: PolylineAnnotationManager,
+    coordinates: List<Point>
 ) {
-    val polylineOptions = PolylineOptions()
-        .addAll(coordinates)
-        .width(7f)
-        .color(android.graphics.Color.argb(204, 230, 81, 0)) // #E65100 at 80% opacity — matches iOS
-        .geodesic(true)
+    manager.deleteAll()
+    if (coordinates.size < 2) return
 
-    val polyline = map.addPolyline(polylineOptions)
-    onPolyline(polyline)
-    Log.d("ShowDriverPosition", "🟠 Route line drawn with ${coordinates.size} points")
+    val lineString = LineString.fromLngLats(coordinates)
+    val lineOptions = PolylineAnnotationOptions()
+        .withGeometry(lineString)
+        .withLineColor("#E65100")
+        .withLineWidth(6.0)
+        .withLineOpacity(0.8)
+    manager.create(lineOptions)
+    Log.d("DriverTracking", "🟠 Route line drawn with ${coordinates.size} points")
 }
 
-// Fallback: draw straight line if Directions API fails (matches iOS drawStraightLine)
+// Fallback: draw straight line if Directions API fails
 private fun drawStraightLine(
-    map: GoogleMap,
-    from: LatLng,
-    to: LatLng,
-    onPolyline: (Polyline?) -> Unit
+    manager: PolylineAnnotationManager,
+    from: Point,
+    to: Point
 ) {
-    val polylineOptions = PolylineOptions()
-        .add(from, to)
-        .width(7f)
-        .color(android.graphics.Color.argb(204, 230, 81, 0))
-        .pattern(listOf(com.google.android.gms.maps.model.Dot(), com.google.android.gms.maps.model.Gap(20f)))
-
-    val polyline = map.addPolyline(polylineOptions)
-    onPolyline(polyline)
-    Log.d("ShowDriverPosition", "🔵 Straight fallback line drawn (Directions API failed)")
+    manager.deleteAll()
+    val lineString = LineString.fromLngLats(listOf(from, to))
+    val lineOptions = PolylineAnnotationOptions()
+        .withGeometry(lineString)
+        .withLineColor("#E65100")
+        .withLineWidth(6.0)
+        .withLineOpacity(0.8)
+    manager.create(lineOptions)
+    Log.d("DriverTracking", "🔵 Straight fallback line drawn (Directions API failed)")
 }
 
 // Fit camera so both user blue dot and driver orange dot are visible (matches iOS fitCameraToShowBoth)
-private fun fitCameraToShowBoth(map: GoogleMap, user: LatLng, driver: LatLng) {
-    val bounds = LatLngBounds.Builder()
-        .include(user)
-        .include(driver)
-        .build()
+private fun fitCameraToShowBoth(
+    mapboxMap: com.mapbox.maps.MapboxMap,
+    user: Point,
+    driver: Point
+) {
+    val southWest = Point.fromLngLat(
+        min(user.longitude(), driver.longitude()),
+        min(user.latitude(), driver.latitude())
+    )
+    val northEast = Point.fromLngLat(
+        max(user.longitude(), driver.longitude()),
+        max(user.latitude(), driver.latitude())
+    )
 
-    val padding = 100 // matches iOS UIEdgeInsets(top: 100, left: 60, bottom: 100, right: 60)
-    map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, padding))
+    val bounds = CoordinateBounds(southWest, northEast)
+
+    val camera = mapboxMap.cameraForCoordinateBounds(
+        bounds,
+        EdgeInsets(100.0, 60.0, 100.0, 60.0),  // top, left, bottom, right padding
+        0.0,  // bearing
+        0.0   // pitch
+    )
+    mapboxMap.setCamera(camera)
 
     val results = FloatArray(1)
     android.location.Location.distanceBetween(
-        user.latitude, user.longitude,
-        driver.latitude, driver.longitude,
+        user.latitude(), user.longitude(),
+        driver.latitude(), driver.longitude(),
         results
     )
-    Log.d("ShowDriverPosition", "🎯 Camera fitted to show both dots — distance: ${String.format("%.1f", results[0])}m")
+    Log.d("DriverTracking", "🎯 Camera fitted to show both dots — distance: ${String.format("%.1f", results[0])}m")
 }
 
 // MARK: - Smooth driver marker interpolation using coroutine (matches iOS CADisplayLink animation)
 private suspend fun animateDriverMarker(
-    map: GoogleMap,
-    from: LatLng,
-    to: LatLng,
+    ptMgr: PointAnnotationManager,
+    from: Point,
+    to: Point,
     durationMs: Long,
-    onFrame: (LatLng) -> Unit,
-    markerRef: () -> Marker?
+    onFrame: (Point) -> Unit
 ) {
     val startTime = System.currentTimeMillis()
     val frameDuration = 16L // ~60fps
@@ -791,25 +650,22 @@ private suspend fun animateDriverMarker(
         var progress = if (durationMs > 0) elapsed.toDouble() / durationMs else 1.0
         progress = progress.coerceIn(0.0, 1.0)
 
-        // Ease-in-out cubic — matches iOS easeInOut
         val easedProgress = easeInOut(progress)
 
-        // Interpolate lat/lng
-        val interpLat = from.latitude + (to.latitude - from.latitude) * easedProgress
-        val interpLng = from.longitude + (to.longitude - from.longitude) * easedProgress
-        val interpCoord = LatLng(interpLat, interpLng)
+        val interpLng = from.longitude() + (to.longitude() - from.longitude()) * easedProgress
+        val interpLat = from.latitude() + (to.latitude() - from.latitude()) * easedProgress
+        val interpPoint = Point.fromLngLat(interpLng, interpLat)
 
-        onFrame(interpCoord)
+        onFrame(interpPoint)
 
-        // Update marker on main thread
         withContext(Dispatchers.Main) {
-            markerRef()?.position = interpCoord
+            placeDriverMarker(ptMgr, interpPoint)
         }
 
         if (progress >= 1.0) {
             onFrame(to)
             withContext(Dispatchers.Main) {
-                markerRef()?.position = to
+                placeDriverMarker(ptMgr, to)
             }
             break
         }
@@ -827,89 +683,7 @@ private fun easeInOut(t: Double): Double {
     }
 }
 
-// MARK: - Create driver marker bitmap (matches iOS createDriverDotImage)
-// Composite marker: profile picture circle above the orange location dot
-private fun createDriverMarkerBitmap(context: android.content.Context): Bitmap {
-    val density = context.resources.displayMetrics.density
-
-    val profileSize = (44 * density).toInt()
-    val dotSize = (20 * density).toInt()
-    val overlap = (6 * density).toInt()
-    val totalWidth = profileSize
-    val totalHeight = profileSize + dotSize - overlap
-
-    val bitmap = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-
-    // === ORANGE LOCATION DOT (bottom center) ===
-    val dotX = (totalWidth - dotSize) / 2f
-    val dotY = (totalHeight - dotSize).toFloat()
-
-    // White outer ring
-    val whitePaint = Paint().apply { color = android.graphics.Color.WHITE; isAntiAlias = true }
-    canvas.drawCircle(dotX + dotSize / 2f, dotY + dotSize / 2f, (dotSize / 2f + 2 * density), whitePaint)
-
-    // Orange inner circle
-    val orangePaint = Paint().apply {
-        color = android.graphics.Color.rgb(217, 95, 2)
-        isAntiAlias = true
-    }
-    canvas.drawCircle(dotX + dotSize / 2f, dotY + dotSize / 2f, dotSize / 2f, orangePaint)
-
-    // === PROFILE PICTURE CIRCLE (top, centered) ===
-    val profileCx = totalWidth / 2f
-    val profileCy = profileSize / 2f
-    val profileRadius = (profileSize / 2f - 3 * density)
-
-    // White border ring
-    val borderPaint = Paint().apply {
-        color = android.graphics.Color.WHITE
-        style = Paint.Style.STROKE
-        strokeWidth = 3 * density
-        isAntiAlias = true
-    }
-    canvas.drawCircle(profileCx, profileCy, profileRadius, borderPaint)
-
-    // Clip to circle for profile background
-    val clipPath = Path().apply {
-        addCircle(profileCx, profileCy, profileRadius - 1.5f * density, Path.Direction.CW)
-    }
-    canvas.save()
-    canvas.clipPath(clipPath)
-
-    // Profile background gradient (orange to navy — matches iOS)
-    val gradient = LinearGradient(
-        profileCx, profileCy - profileRadius,
-        profileCx, profileCy + profileRadius,
-        android.graphics.Color.rgb(217, 95, 2),  // orange
-        android.graphics.Color.rgb(0, 51, 102),  // navy
-        Shader.TileMode.CLAMP
-    )
-    val gradientPaint = Paint().apply {
-        shader = gradient
-        isAntiAlias = true
-    }
-    canvas.drawCircle(profileCx, profileCy, profileRadius, gradientPaint)
-
-    // Draw initials "JD" (mock driver name: John Driver)
-    val initialsPaint = Paint().apply {
-        color = android.graphics.Color.WHITE
-        textSize = 18 * density
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        isAntiAlias = true
-        textAlign = Paint.Align.CENTER
-    }
-    val textBounds = android.graphics.Rect()
-    initialsPaint.getTextBounds("JD", 0, 2, textBounds)
-    canvas.drawText("JD", profileCx, profileCy + textBounds.height() / 2f, initialsPaint)
-
-    canvas.restore()
-
-    return bitmap
-}
-
 // MARK: - Ride Options Bottom Sheet (matches iOS RideOptionsSheet)
-// White background styling — matches iOS .presentationBackground(Color.white) + onAppear appearance fixes
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RideOptionsBottomSheet(
@@ -925,7 +699,6 @@ private fun RideOptionsBottomSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            // Header
             Text(
                 text = "Ride Options",
                 fontSize = 20.sp,
@@ -934,7 +707,6 @@ private fun RideOptionsBottomSheet(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // Contact Section
             Text(
                 text = "Contact",
                 fontSize = 14.sp,
@@ -955,7 +727,6 @@ private fun RideOptionsBottomSheet(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-            // Trip Section
             Text(
                 text = "Trip",
                 fontSize = 14.sp,
@@ -976,7 +747,6 @@ private fun RideOptionsBottomSheet(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
-            // Cancel Ride
             RideOptionItem(
                 icon = { Icon(Icons.Default.Close, contentDescription = null, tint = Color(0xFFF44336)) },
                 title = "Cancel Ride",
