@@ -10,6 +10,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import android.app.NotificationManager
+import android.content.Context
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -76,6 +78,9 @@ class MainActivity : ComponentActivity() {
         // Request notification permission (Android 13+)
         requestNotificationPermission()
 
+        // Clear all notifications (and badge) when app is opened from launcher
+        clearNotifications()
+
         setContent {
             BirdyTheme {
                 Surface(
@@ -86,6 +91,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Clear badge whenever app comes to foreground
+        clearNotifications()
+    }
+
+    private fun clearNotifications() {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancelAll()
+        Log.d("MainActivity", "✅ All notifications cleared (badge removed)")
     }
 
     private fun requestNotificationPermission() {
@@ -170,6 +187,7 @@ fun BirdyApp() {
                                     onRestaurantClick = { restaurantId ->
                                         selectedRestaurantId = restaurantId
                                         selectedStoreName = ""
+                                        showFastFoodHome = false
                                         showStore = true
                                     }
                                 )
@@ -180,6 +198,7 @@ fun BirdyApp() {
                                     onRestaurantClick = { restaurantId ->
                                         selectedRestaurantId = restaurantId
                                         selectedStoreName = ""
+                                        showPizzaHome = false
                                         showStore = true
                                     }
                                 )
