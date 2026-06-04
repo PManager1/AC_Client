@@ -92,13 +92,16 @@ fun ProfileScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    // Original values for change tracking (mirrors iOS nameChanged, serviceChanged, etc.)
-    var originalName by remember { mutableStateOf("") }
-    var originalService by remember { mutableStateOf("") }
-    var originalProfileImageUrl by remember { mutableStateOf("") }
-    // Editable states (mirrors iOS @State private vars)
-    var name by remember { mutableStateOf("") }
-    var service by remember { mutableStateOf("") }
+    // Original values for change tracking
+    var originalFirstName by remember { mutableStateOf("") }
+    var originalLastName by remember { mutableStateOf("") }
+    var originalEmail by remember { mutableStateOf("") }
+    var originalPhone by remember { mutableStateOf("") }
+    // Editable states
+    var firstName by remember { mutableStateOf("") }
+    var lastName by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var phoneNumber by remember { mutableStateOf("") }
     var profileImageUrl by remember { mutableStateOf("") }
 
     // UI state
@@ -253,16 +256,15 @@ fun ProfileScreen(
                         if (serviceProfile.has("providerDetails")) {
                             val details = serviceProfile.getJSONObject("providerDetails")
                             withContext(Dispatchers.Main) {
-                                // Build name from user's first + last
-                                val firstName = json.optJSONObject("user")?.optString("firstName", "") ?: ""
-                                val lastName = json.optJSONObject("user")?.optString("lastName", "") ?: ""
-                                val fullName = "$firstName $lastName".trim()
-
-                                name = details.optString("name", fullName)
-                                service = details.optString("service", "")
+                                // Load user personal info from user object
+                                val userObj = json.optJSONObject("user")
+                                firstName = userObj?.optString("firstName", "") ?: ""
+                                lastName = userObj?.optString("lastName", "") ?: ""
+                                email = userObj?.optString("email", "") ?: ""
+                                phoneNumber = userObj?.optString("phoneNumber", "") ?: ""
                                 profileImageUrl = details.optString("profileImage", "")
 
-                                // Save rating from providerDetails (matches iOS profile.rating)
+                                // Save rating from providerDetails
                                 val ratingValue = details.optDouble("rating", 5.0).toFloat()
                                 AuthManager.setUserRating(ratingValue)
 
@@ -270,9 +272,10 @@ fun ProfileScreen(
                                 AuthManager.setProfileImageUrl(profileImageUrl)
 
                                 // Store originals for change tracking
-                                originalName = name
-                                originalService = service
-                                originalProfileImageUrl = profileImageUrl
+                                originalFirstName = firstName
+                                originalLastName = lastName
+                                originalEmail = email
+                                originalPhone = phoneNumber
                             }
                         }
                     }
@@ -312,14 +315,17 @@ fun ProfileScreen(
                 // Build payload — only include changed fields (mirrors iOS change tracking)
                 val jsonObject = JSONObject()
 
-                if (name != originalName) {
-                    jsonObject.put("name", name)
+                if (firstName != originalFirstName) {
+                    jsonObject.put("firstName", firstName)
                 }
-                if (service != originalService) {
-                    jsonObject.put("service", service)
+                if (lastName != originalLastName) {
+                    jsonObject.put("lastName", lastName)
                 }
-                if (profileImageUrl != originalProfileImageUrl) {
-                    jsonObject.put("profileImage", profileImageUrl)
+                if (email != originalEmail) {
+                    jsonObject.put("email", email)
+                }
+                if (phoneNumber != originalPhone) {
+                    jsonObject.put("phoneNumber", phoneNumber)
                 }
 
                 // If no fields changed, don't make the request (matches iOS)
@@ -352,9 +358,10 @@ fun ProfileScreen(
                     isSaving = false
                     if (statusCode == 200) {
                         // Update originals to new values
-                        originalName = name
-                        originalService = service
-                        originalProfileImageUrl = profileImageUrl
+                        originalFirstName = firstName
+                        originalLastName = lastName
+                        originalEmail = email
+                        originalPhone = phoneNumber
 
                         // Persist profile image to AuthManager
                         AuthManager.setProfileImageUrl(profileImageUrl)
@@ -598,29 +605,38 @@ fun ProfileScreen(
 
                             Spacer(modifier = Modifier.height(15.dp))
 
-                            // Professional Name (matches iOS "Professional Name")
+                            // First Name
                             ProfileInputField(
-                                placeholder = "Professional Name",
-                                value = name,
-                                onValueChange = { name = it }
+                                placeholder = "First Name",
+                                value = firstName,
+                                onValueChange = { firstName = it }
                             )
 
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            // Service Type (matches iOS "Service Type")
+                            // Last Name
                             ProfileInputField(
-                                placeholder = "Service Type",
-                                value = service,
-                                onValueChange = { service = it }
+                                placeholder = "Last Name",
+                                value = lastName,
+                                onValueChange = { lastName = it }
                             )
 
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            // Profile Image URL (matches iOS "Profile Image URL")
+                            // Email
                             ProfileInputField(
-                                placeholder = "Profile Image URL",
-                                value = profileImageUrl,
-                                onValueChange = { profileImageUrl = it }
+                                placeholder = "Email",
+                                value = email,
+                                onValueChange = { email = it }
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Phone Number
+                            ProfileInputField(
+                                placeholder = "Phone Number",
+                                value = phoneNumber,
+                                onValueChange = { phoneNumber = it }
                             )
                         }
 
