@@ -77,6 +77,7 @@ dependencies {
 
     // Coil (image loading — matches iOS AsyncImage)
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     // Stripe Android SDK (matches iOS Stripe SDK)
     implementation("com.stripe:stripe-android:21.4.0")

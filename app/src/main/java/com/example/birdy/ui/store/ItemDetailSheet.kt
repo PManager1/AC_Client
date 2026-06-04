@@ -51,7 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.birdy.data.CartItem
 import kotlinx.coroutines.launch
 
@@ -204,7 +204,7 @@ fun ItemDetailSheet(
 
             // Item image
             if (item.image_url.isNotEmpty()) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = item.image_url,
                     contentDescription = item.name,
                     contentScale = ContentScale.Crop,
@@ -212,7 +212,26 @@ fun ItemDetailSheet(
                         .fillMaxWidth()
                         .height(220.dp)
                         .padding(horizontal = 16.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(16.dp)),
+                    loading = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp)
+                                .background(Color(0xFFF0F0F0), RoundedCornerShape(16.dp))
+                        )
+                    },
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp)
+                                .background(Color(0xFFE8E8E8), RoundedCornerShape(16.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("🍽️", fontSize = 40.sp)
+                        }
+                    }
                 )
                 Spacer(modifier = Modifier.height(16.dp))
             }

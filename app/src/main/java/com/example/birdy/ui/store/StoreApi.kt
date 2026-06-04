@@ -1,11 +1,40 @@
 package com.example.birdy.ui.store
 
+import android.content.Context
+import android.util.Log
 import com.example.birdy.data.Config
+import com.example.birdy.data.LocationManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.InputStream
+
+// MARK: - Helper: Defensive image URL parsing (handles both imageUrl and image_url from Go backend)
+
+/** Resolve image URL from a JSON object, checking both camelCase and snake_case naming conventions */
+private fun resolveImageUrl(obj: JSONObject, vararg keys: String): String {
+    // Check common naming conventions
+    for (key in keys) {
+        val value = obj.optString(key, "")
+        if (value.isNotEmpty()) return value
+    }
+    // Fallback: check both conventions automatically
+    obj.optString("imageUrl", "").let { if (it.isNotEmpty()) return it }
+    obj.optString("image_url", "").let { if (it.isNotEmpty()) return it }
+    obj.optString("image", "").let { if (it.isNotEmpty()) return it }
+    obj.optString("photoUrl", "").let { if (it.isNotEmpty()) return it }
+    obj.optString("photo_url", "").let { if (it.isNotEmpty()) return it }
+    return ""
+}
+
+/** If item image is empty, fall back to brand images so cards are never blank */
+private fun fallbackImageUrl(itemImageUrl: String, brandLogoUrl: String, brandBannerUrl: String): String {
+    if (itemImageUrl.isNotEmpty()) return itemImageUrl
+    if (brandLogoUrl.isNotEmpty()) return brandLogoUrl
+    if (brandBannerUrl.isNotEmpty()) return brandBannerUrl
+    return ""
+}
 
 // MARK: - Mock Store Data (offline fallback)
 
@@ -284,18 +313,195 @@ private val mockStoreJSON = mapOf(
     """
 )
 
-// MARK: - API Fetcher (with mock fallback)
+// MARK: - API Fetcher (live API first, mock fallback)
 
-suspend fun fetchStoreDetail(restaurantId: String, storeName: String = ""): StoreData? {
+suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", context: Context? = null): StoreData? {
     return withContext(Dispatchers.IO) {
-        // 1. Try mock data first for known IDs
-        val mockJson = mockStoreJSON[restaurantId]
-        if (mockJson != null) {
+        // 0. Prefetch GPS coordinates if context is provided
+        var lat = 0.0
+        var lng = 0.0
+        if (context != null) {
             try {
-                return@withContext parseStoreJson(JSONObject(mockJson))
+                val coords = LocationManager.fetchLocation(context)
+                lat = coords.first
+                lng = coords.second
             } catch (e: Exception) {
-                // Fall through to API
+                Log.w("StoreApi", "⚠️ Location fetch failed: ${e.message}")
             }
+        }
+
+        // 1. Try /nearest-store?lat=&lng= (single call → brand + location + menu)
+        try {
+            val nearestUrl = "${Config.API_BASE_URL}/chains/brands/$restaurantId/nearest-store?lat=$lat&lng=$lng"
+            Log.d("StoreApi", "➡️ Trying nearest-store: $nearestUrl")
+            val conn = java.net.URL(nearestUrl).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 10000
+            conn.readTimeout = 10000
+            if (conn.responseCode == 200) {
+                val rawJson = conn.inputStream.bufferedReader().readText()
+                Log.d("StoreApi", "📋 /nearest-store raw JSON (first 500): ${rawJson.take(500)}")
+                val root = JSONObject(rawJson)
+                val brandObj = root.optJSONObject("brand")
+                val storeObj = root.optJSONObject("nearestStore")
+                val menuObj = root.optJSONObject("menu")
+
+                if (brandObj != null) {
+                    val brandName = brandObj.optString("name", "")
+                    val brandType = brandObj.optString("brandType", "")
+                    val logoUrl = brandObj.optString("logoUrl", "")
+                    val bannerUrl = brandObj.optString("bannerUrl", "")
+                    val carouselArr = brandObj.optJSONArray("carouselImages")
+                    val carouselImages = if (carouselArr != null) {
+                        (0 until carouselArr.length()).mapNotNull { carouselArr.optString(it).takeIf { s -> s.isNotEmpty() } }
+                    } else emptyList<String>()
+                    val effectiveBanner = bannerUrl.ifEmpty { carouselImages.firstOrNull() ?: "" }
+                    val tagsArr = brandObj.optJSONArray("tags")
+                    val tags = if (tagsArr != null) (0 until tagsArr.length()).map { tagsArr.getString(it) } else emptyList<String>()
+
+                    // Parse location info from nearestStore
+                    var distance = ""
+                    var address = ""
+                    var phone: String? = null
+                    var deliveryFee = 0.0
+                    var deliveryTimeEst = "20-35 min"
+                    var operatingHours: Map<String, String>? = null
+                    var storeLat = 0.0
+                    var storeLng = 0.0
+
+                    if (storeObj != null) {
+                        val dist = storeObj.optDouble("distance", 0.0)
+                        distance = if (dist > 0) "${String.format("%.1f", dist)} mi" else ""
+                        address = listOfNotNull(
+                            storeObj.optString("address", "").takeIf { it.isNotEmpty() },
+                            storeObj.optString("city", "").takeIf { it.isNotEmpty() }
+                        ).joinToString(", ")
+                        phone = storeObj.optString("phone", "").takeIf { it.isNotEmpty() }
+                        deliveryTimeEst = storeObj.optString("deliveryTimeEst", "20-35 min")
+                        storeLat = storeObj.optDouble("latitude", 0.0)
+                        storeLng = storeObj.optDouble("longitude", 0.0)
+                        // Parse hours
+                        val hoursObj = storeObj.optJSONObject("hours")
+                        if (hoursObj != null) {
+                            val hoursMap = mutableMapOf<String, String>()
+                            val keys = hoursObj.keys()
+                            while (keys.hasNext()) {
+                                val key = keys.next()
+                                hoursMap[key] = hoursObj.getString(key)
+                            }
+                            operatingHours = hoursMap.ifEmpty { null }
+                        }
+                    }
+
+                    // Parse menu categories
+                    val menuCategories = mutableListOf<StoreMenuCategory>()
+                    if (menuObj != null) {
+                        val categoriesArr = menuObj.optJSONArray("categories")
+                        val modGroupsArr = menuObj.optJSONArray("modifierGroups")
+
+                        // Parse modifier groups
+                        val modGroupMap = HashMap<String, StoreModifierGroup>()
+                        if (modGroupsArr != null) {
+                            for (mg in 0 until modGroupsArr.length()) {
+                                val mgObj = modGroupsArr.getJSONObject(mg)
+                                val optsArr = mgObj.optJSONArray("options") ?: JSONArray()
+                                modGroupMap[mgObj.optString("id", "")] = StoreModifierGroup(
+                                    id = mgObj.optString("id", ""),
+                                    name = mgObj.optString("name", ""),
+                                    min_selection = mgObj.optInt("minSelect", 0),
+                                    max_selection = mgObj.optInt("maxSelect", 1),
+                                    is_required = mgObj.optBoolean("required", false),
+                                    options = (0 until optsArr.length()).map { oi ->
+                                        val oObj = optsArr.getJSONObject(oi)
+                                        StoreModifierOption(
+                                            id = oObj.optString("id", ""),
+                                            name = oObj.optString("name", ""),
+                                            extra_price = oObj.optDouble("price", 0.0),
+                                            is_default = false
+                                        )
+                                    }
+                                )
+                            }
+                        }
+
+                        if (categoriesArr != null) {
+                            for (ci in 0 until categoriesArr.length()) {
+                                val catObj = categoriesArr.getJSONObject(ci)
+                                val catName = catObj.optString("name", "")
+                                val itemsArr = catObj.optJSONArray("items")
+                                val catItems = mutableListOf<StoreMenuItem>()
+                                if (itemsArr != null) {
+                                    for (ii in 0 until itemsArr.length()) {
+                                        val iObj = itemsArr.getJSONObject(ii)
+                                        val itemModGroupIds = iObj.optJSONArray("modifierGroupIds")
+                                        val itemModGroups = mutableListOf<StoreModifierGroup>()
+                                        if (itemModGroupIds != null) {
+                                            for (gi in 0 until itemModGroupIds.length()) {
+                                                modGroupMap[itemModGroupIds.getString(gi)]?.let { itemModGroups.add(it) }
+                                            }
+                                        }
+                                        val resolvedImg = fallbackImageUrl(resolveImageUrl(iObj), logoUrl, effectiveBanner)
+                                        catItems.add(StoreMenuItem(
+                                            id = iObj.optString("id", ""),
+                                            name = iObj.optString("name", ""),
+                                            description = iObj.optString("description", ""),
+                                            price = iObj.optDouble("basePrice", iObj.optDouble("price", 0.0)),
+                                            image_url = resolvedImg,
+                                            is_available = iObj.optBoolean("isAvailable", true),
+                                            modifier_groups = itemModGroups
+                                        ))
+                                    }
+                                }
+                                if (catItems.isNotEmpty()) {
+                                    menuCategories.add(StoreMenuCategory(category_name = catName, items = catItems))
+                                }
+                            }
+                        }
+                    }
+
+                    val storeData = StoreData(
+                        restaurant_id = restaurantId,
+                        brand_info = StoreBrandInfo(
+                            name = brandName,
+                            logo_url = logoUrl,
+                            banner_image_url = effectiveBanner,
+                            rating = 4.5,
+                            review_count = "100+",
+                            cuisine = brandType.replaceFirstChar { it.uppercase() },
+                            tags = tags.ifEmpty { listOf(brandType.replaceFirstChar { it.uppercase() }) }
+                        ),
+                        location_info = StoreLocationInfo(
+                            distance = distance,
+                            delivery_fee = deliveryFee,
+                            delivery_time_est = deliveryTimeEst,
+                            address = address,
+                            phone = phone,
+                            operating_hours = operatingHours,
+                            latitude = storeLat,
+                            longitude = storeLng
+                        ),
+                        menu = menuCategories.ifEmpty {
+                            listOf(StoreMenuCategory(
+                                category_name = "Menu",
+                                items = listOf(StoreMenuItem(
+                                    id = "placeholder",
+                                    name = "Menu coming soon",
+                                    description = "This restaurant's menu is being updated",
+                                    price = 0.0,
+                                    image_url = "",
+                                    is_available = false,
+                                    modifier_groups = emptyList()
+                                ))
+                            ))
+                        }
+                    )
+                    Log.d("StoreApi", "✅ Loaded from /nearest-store: $brandName, ${menuCategories.size} categories, distance=$distance")
+                    return@withContext storeData
+                }
+            }
+            conn.disconnect()
+        } catch (e: Exception) {
+            Log.w("StoreApi", "⚠️ /nearest-store failed: ${e.message}")
         }
 
         // 2. Try chain brand API — fetches brand info + menu from /chains/brands/{id}
@@ -305,8 +511,10 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = ""): Stor
             brandConn.requestMethod = "GET"
             brandConn.connectTimeout = 10000
             brandConn.readTimeout = 10000
-            if (brandConn.responseCode == 200) {
-                val brandJson = JSONObject(brandConn.inputStream.bufferedReader().readText())
+                    if (brandConn.responseCode == 200) {
+                        val brandRawJson = brandConn.inputStream.bufferedReader().readText()
+                        Log.d("StoreApi", "📋 /chains/brands/{id} raw JSON (first 500): ${brandRawJson.take(500)}")
+                        val brandJson = JSONObject(brandRawJson)
                 val brandName = brandJson.optString("name", "")
                 val brandType = brandJson.optString("brandType", "")
                 val logoUrl = brandJson.optString("logoUrl", "")
@@ -381,12 +589,13 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = ""): Stor
                                     }
                                 }
 
+                                val resolvedImg = fallbackImageUrl(resolveImageUrl(iObj), logoUrl, effectiveBanner)
                                 val item = StoreMenuItem(
                                     id = iObj.optString("id", ""),
                                     name = iObj.optString("name", ""),
                                     description = iObj.optString("description", ""),
                                     price = iObj.optDouble("basePrice", 0.0),
-                                    image_url = iObj.optString("imageUrl", ""),
+                                    image_url = resolvedImg,
                                     is_available = iObj.optBoolean("isAvailable", true),
                                     modifier_groups = itemModGroups
                                 )
@@ -458,12 +667,13 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = ""): Stor
                                         (0 until catIdsArr.length()).map { catIdsArr.getString(it) }
                                     } else emptyList<String>()
 
+                                    val resolvedImg = fallbackImageUrl(resolveImageUrl(iObj), logoUrl, effectiveBanner)
                                     val item = StoreMenuItem(
                                         id = iObj.optString("id", ""),
                                         name = iObj.optString("name", ""),
                                         description = iObj.optString("description", ""),
                                         price = iObj.optDouble("price", 0.0),
-                                        image_url = iObj.optString("imageUrl", ""),
+                                        image_url = resolvedImg,
                                         is_available = iObj.optBoolean("isAvailable", true),
                                         modifier_groups = emptyList()
                                     )
@@ -561,13 +771,14 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = ""): Stor
             val itemsWithCats = (0 until itemsArr.length()).map { i ->
                 val item = itemsArr.getJSONObject(i)
                 val cat = item.optString("category", "")
+                val resolvedImg = fallbackImageUrl(resolveImageUrl(item), gLogoUrl, gBannerUrl)
                 ItemWithCategory(
                     menuItem = StoreMenuItem(
                         id = item.optString("id", "g-$i"),
                         name = item.optString("name", "Item"),
                         description = item.optString("description", ""),
                         price = item.optDouble("price", 0.0),
-                        image_url = item.optString("imageUrl", ""),
+                        image_url = resolvedImg,
                         is_available = true,
                         modifier_groups = emptyList()
                     ),

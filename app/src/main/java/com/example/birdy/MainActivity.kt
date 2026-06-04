@@ -87,7 +87,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = Color.White
                 ) {
-                    BirdyApp()
+                    BirdyAppContent()
                 }
             }
         }
@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun BirdyApp() {
+fun BirdyAppContent() {
     var selectedTab by remember { mutableIntStateOf(TAB_HOME) }
     var showRequestDetail by remember { mutableStateOf(false) }
     var showSearchFood by remember { mutableStateOf(false) }
@@ -374,7 +374,7 @@ fun BirdyAppPreview() {
             modifier = Modifier.fillMaxSize(),
             color = Color.White
         ) {
-            BirdyApp()
+            BirdyAppContent()
         }
     }
 }

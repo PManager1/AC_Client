@@ -71,7 +71,8 @@ private val OrangeSec3 = Color(0xFFFF9500)
 // Navigation pages for Account sub-screens
 enum class AccountPage {
     Main, Help, Wallet, Pass, ManageAccount, SignIn, SignOut, DeleteAccount, Profile,
-    Settings, Referral, ReferralCode, Notifications, Language, BugReporter
+    Settings, Referral, ReferralCode, Notifications, Language, BugReporter,
+    TestPages, ChatView
 }
 
 // Matches iOS ProfessionalSettings.swift
@@ -142,6 +143,13 @@ fun AccountScreen(
         )
         AccountPage.BugReporter -> BugReporterScreen(
             onBack = { currentPage = AccountPage.Main }
+        )
+        AccountPage.TestPages -> TestPagesScreen(
+            onBack = { currentPage = AccountPage.Main },
+            onNavigateToChatView = { currentPage = AccountPage.ChatView }
+        )
+        AccountPage.ChatView -> ChatScreen(
+            onBack = { currentPage = AccountPage.TestPages }
         )
         AccountPage.Main -> {
             // Read user info from AuthManager — re-read when refreshKey changes (after login/logout)
@@ -223,7 +231,7 @@ fun AccountScreen(
                     ListItemRow(
                         title = "Settings Test pages",
                         icon = Icons.Default.HourglassEmpty,
-                        onClick = { currentPage = AccountPage.Settings }
+                        onClick = { currentPage = AccountPage.TestPages }
                     )
                     ListItemRow(
                         title = "Referral",

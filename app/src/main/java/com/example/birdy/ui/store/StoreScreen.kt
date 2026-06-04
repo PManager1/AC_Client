@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -52,7 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.birdy.data.CartItem
 import com.example.birdy.data.CartManager
 import java.io.InputStream
@@ -78,12 +79,13 @@ fun StoreScreen(
     var showRestaurantInfo by remember { mutableStateOf(false) }
 
     // Load data: API if restaurantId provided, else local JSON
+    val context = LocalContext.current
     LaunchedEffect(restaurantId) {
         isLoading = true
         loadError = false
         try {
             if (restaurantId.isNotEmpty()) {
-                storeData = fetchStoreDetail(restaurantId, storeName = storeName)
+                storeData = fetchStoreDetail(restaurantId, storeName = storeName, context = context)
             } else if (jsonInputStream != null) {
                 storeData = loadStoreData(jsonInputStream)
             }
@@ -345,13 +347,29 @@ fun StoreScreen(
                             .background(Color.Gray.copy(alpha = 0.15f))
                     )
                 } else {
-                    AsyncImage(
+                    SubcomposeAsyncImage(
                         model = data.brand_info.banner_image_url,
                         contentDescription = "Banner",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(240.dp)
+                            .height(240.dp),
+                        loading = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(240.dp)
+                                    .background(Color.Gray.copy(alpha = 0.15f))
+                            )
+                        },
+                        error = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(240.dp)
+                                    .background(Color.Gray.copy(alpha = 0.15f))
+                            )
+                        }
                     )
                 }
 
@@ -391,7 +409,7 @@ fun StoreScreen(
             ) {
                 // Logo overlapping banner
                 Box(modifier = Modifier.offset(y = (-40).dp)) {
-                    AsyncImage(
+                    SubcomposeAsyncImage(
                         model = data.brand_info.logo_url,
                         contentDescription = "Logo",
                         contentScale = ContentScale.Crop,
@@ -399,7 +417,29 @@ fun StoreScreen(
                             .size(84.dp)
                             .clip(CircleShape)
                             .background(Color.White)
-                            .shadow(8.dp, CircleShape)
+                            .shadow(8.dp, CircleShape),
+                        loading = {
+                            Box(
+                                modifier = Modifier
+                                    .size(84.dp)
+                                    .background(Color.Gray.copy(alpha = 0.1f), CircleShape)
+                            )
+                        },
+                        error = {
+                            Box(
+                                modifier = Modifier
+                                    .size(84.dp)
+                                    .background(Color.Gray.copy(alpha = 0.15f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = data.brand_info.name.take(1).uppercase(),
+                                    fontSize = 28.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
                     )
                 }
 

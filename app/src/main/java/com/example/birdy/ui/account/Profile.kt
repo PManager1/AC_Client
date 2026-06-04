@@ -1,6 +1,13 @@
 package com.example.birdy.ui.account
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +56,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -58,6 +66,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -111,9 +120,25 @@ fun ProfileScreen(
     // UI state
     var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
+    var isUploading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showErrorDialog by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
+
+    // Local image preview during upload
+    var localImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Image picker launcher
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            localImageUri = it
+            scope.launch {
+                uploadProfileImage(it)
+            }
+        }
+    }
 
     // Fetch profile on first composition (mirrors iOS init from profile object)
     suspend fun fetchProfile() {
@@ -319,6 +344,96 @@ fun ProfileScreen(
         }
     }
 
+    // Upload profile image: compress → upload to backend → update URL
+    suspend fun uploadProfileImage(uri: Uri) {
+        withContext(Dispatchers.IO) {
+            try {
+                withContext(Dispatchers.Main) { isUploading = true }
+
+                // Read image bytes from URI
+                val inputStream = context.contentResolver.openInputStream(uri) ?: run {
+                    withContext(Dispatchers.Main) {
+                        errorMessage = "Could not read image"
+                        showErrorDialog = true
+                        isUploading = false
+                    }
+                    return@withContext
+                }
+                val originalBytes = inputStream.readBytes()
+                inputStream.close()
+
+                // Compress: resize to max 1200px + JPEG 70% quality
+                val compressedBytes = compressAndResizeImage(originalBytes, maxDimension = 1200, quality = 70)
+                println("📸 Image compressed: ${originalBytes.size} bytes → ${compressedBytes.size} bytes")
+
+                val token = AuthManager.getToken(context) ?: run {
+                    withContext(Dispatchers.Main) {
+                        errorMessage = "Authentication required"
+                        showErrorDialog = true
+                        isUploading = false
+                    }
+                    return@withContext
+                }
+
+                // Upload via multipart POST to /upload/image
+                val boundary = "Boundary-${System.currentTimeMillis()}"
+                val url = URL("${Config.API_BASE_URL}/upload/image")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    setRequestProperty("Authorization", "Bearer $token")
+                    setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                    connectTimeout = 30000
+                    readTimeout = 30000
+                }
+
+                val fileName = "profile_${System.currentTimeMillis()}.jpg"
+                val body = ByteArrayOutputStream()
+                body.write("--$boundary\r\n".toByteArray())
+                body.write("Content-Disposition: form-data; name=\"image\"; filename=\"$fileName\"\r\n".toByteArray())
+                body.write("Content-Type: image/jpeg\r\n\r\n".toByteArray())
+                body.write(compressedBytes)
+                body.write("\r\n--$boundary--\r\n".toByteArray())
+
+                conn.outputStream.use { os ->
+                    os.write(body.toByteArray())
+                    os.flush()
+                }
+
+                val statusCode = conn.responseCode
+                if (statusCode == 200) {
+                    val response = conn.inputStream.bufferedReader().readText()
+                    val json = JSONObject(response)
+                    val uploadedUrl = json.optString("url", "")
+                    conn.disconnect()
+
+                    withContext(Dispatchers.Main) {
+                        if (uploadedUrl.isNotEmpty()) {
+                            profileImageUrl = uploadedUrl
+                            AuthManager.setProfileImageUrl(uploadedUrl)
+                            println("✅ Profile image uploaded: $uploadedUrl")
+                        }
+                        isUploading = false
+                    }
+                } else {
+                    val errorBody = conn.errorStream?.bufferedReader()?.readText() ?: "HTTP $statusCode"
+                    conn.disconnect()
+                    withContext(Dispatchers.Main) {
+                        errorMessage = "Upload failed: $errorBody"
+                        showErrorDialog = true
+                        isUploading = false
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    errorMessage = "Upload error: ${e.localizedMessage}"
+                    showErrorDialog = true
+                    isUploading = false
+                }
+            }
+        }
+    }
+
     // Trigger fetch on load
     remember {
         scope.launch { fetchProfile() }
@@ -400,13 +515,15 @@ fun ProfileScreen(
                 ) {
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // Profile Image Section (matches iOS profile image with camera overlay)
+                    // Profile Image Section — tap to pick, loading overlay during upload
                     Box(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !isUploading) { imagePickerLauncher.launch("image/*") },
                         contentAlignment = Alignment.Center
                     ) {
                         Box {
-                            // Profile image circle
+                            // Profile image circle — show local preview during upload, else remote
                             Box(
                                 modifier = Modifier
                                     .size(100.dp)
@@ -414,7 +531,17 @@ fun ProfileScreen(
                                     .background(Color.Gray.copy(alpha = 0.3f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (profileImageUrl.isNotBlank()) {
+                                if (isUploading && localImageUri != null) {
+                                    // Show locally selected image as preview while uploading
+                                    AsyncImage(
+                                        model = localImageUri,
+                                        contentDescription = "Uploading",
+                                        modifier = Modifier
+                                            .size(100.dp)
+                                            .clip(CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else if (profileImageUrl.isNotBlank()) {
                                     AsyncImage(
                                         model = profileImageUrl,
                                         contentDescription = "Profile Photo",
@@ -432,22 +559,52 @@ fun ProfileScreen(
                                     )
                                 }
                             }
-                            // Camera icon overlay (matches iOS camera.fill)
+
+                            // Camera icon overlay (hidden during upload)
+                            if (!isUploading) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .offset(y = 16.dp)
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(OrangeTitle.copy(alpha = 0.8f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CameraAlt,
+                                        contentDescription = "Change Photo",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        // Loading overlay — spinner + "Uploading..." on top of the image
+                        if (isUploading) {
                             Box(
                                 modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .offset(y = 16.dp)
-                                    .size(36.dp)
+                                    .size(100.dp)
                                     .clip(CircleShape)
-                                    .background(OrangeTitle.copy(alpha = 0.8f)),
+                                    .background(Color.Black.copy(alpha = 0.5f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.CameraAlt,
-                                    contentDescription = "Change Photo",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp,
+                                        color = Color.White
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Uploading...",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }
@@ -722,6 +879,37 @@ fun ProfileScreen(
             }
         )
     }
+}
+
+// MARK: - Image Compression Helper
+/**
+ * Resizes image to fit within maxDimension×maxDimension and compresses as JPEG.
+ * Typical: 5-12MB photo → 200-500KB
+ */
+private fun compressAndResizeImage(imageBytes: ByteArray, maxDimension: Int = 1200, quality: Int = 70): ByteArray {
+    val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size) ?: return imageBytes
+
+    // Calculate scale to fit within maxDimension
+    val scale: Float = if (bitmap.width > bitmap.height) {
+        maxDimension.toFloat() / bitmap.width
+    } else {
+        maxDimension.toFloat() / bitmap.height
+    }
+
+    // Only downscale, never upscale
+    val finalScale = minOf(scale, 1.0f)
+    val newWidth = (bitmap.width * finalScale).toInt()
+    val newHeight = (bitmap.height * finalScale).toInt()
+
+    val resized = Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+
+    // Recycle original if it's different from resized
+    if (resized != bitmap) bitmap.recycle()
+
+    val stream = ByteArrayOutputStream()
+    resized.compress(Bitmap.CompressFormat.JPEG, quality, stream)
+    resized.recycle()
+    return stream.toByteArray()
 }
 
 // MARK: - Profile Input Field (matches iOS TextField with shadow styling)

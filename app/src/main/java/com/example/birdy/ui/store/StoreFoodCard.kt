@@ -29,7 +29,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
+import android.util.Log
+import coil.compose.SubcomposeAsyncImage
 import com.example.birdy.data.CartItem
 import com.example.birdy.data.CartManager
 
@@ -48,6 +49,19 @@ fun StoreFoodCard(
 
     val hasModifiers = menuItem.modifier_groups.isNotEmpty()
 
+    // Log image URL type for debugging (data: URI vs https://)
+    val imgUrl = menuItem.image_url
+    if (imgUrl.isNotEmpty()) {
+        val type = when {
+            imgUrl.startsWith("data:", ignoreCase = true) -> "base64-data-uri (${imgUrl.length} chars)"
+            imgUrl.startsWith("http", ignoreCase = true) -> "url"
+            else -> "unknown"
+        }
+        Log.d("StoreFoodCard", "🖼️ [${menuItem.name}] image type=$type, preview=${imgUrl.take(80)}")
+    } else {
+        Log.w("StoreFoodCard", "⚠️ [${menuItem.name}] NO image URL — card will show fallback")
+    }
+
     Column(
         modifier = Modifier.width(cardWidth),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -59,13 +73,30 @@ fun StoreFoodCard(
                 .clip(RoundedCornerShape(12.dp))
                 .clickable { onItemTap() }
         ) {
-            AsyncImage(
+            SubcomposeAsyncImage(
                 model = menuItem.image_url,
                 contentDescription = menuItem.name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(12.dp)),
+                loading = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFFF0F0F0))
+                    )
+                },
+                error = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color(0xFFE8E8E8)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("🍕", fontSize = 32.sp)
+                    }
+                }
             )
 
             if (hasModifiers) {
