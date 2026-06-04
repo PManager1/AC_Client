@@ -46,7 +46,7 @@ private val OrangeSec6 = Color(0xFFE5E5EA)
 private val OrangeSec7 = Color(0xFF1C1C1E)
 private val OrangeSec2 = Color(0xFF8E8E93)
 
-// Matches iOS Settings pattern (Settings button in ProfessionalSettings)
+// Matches iOS Settings pattern (Settings button in Account)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit = {},

@@ -75,7 +75,7 @@ enum class AccountPage {
     TestPages, ChatView, VerifyOtp
 }
 
-// Matches iOS ProfessionalSettings.swift
+// Matches iOS Account.swift
 @Composable
 fun AccountScreen(
     modifier: Modifier = Modifier
