@@ -2,7 +2,6 @@ package com.example.birdy.ui.account
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Matrix
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,11 +25,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -82,11 +78,8 @@ private val OrangeSec7 = Color(0xFF1C1C1E)
  * ProfileScreen — mirrors iOS ProfileN.swift
  *
  * Edit Profile page with:
- *  - Profile image (tap to change URL)
+ *  - Profile image (tap to change via camera/gallery)
  *  - Basic Information (Professional Name, Service Type, Profile Image URL)
- *  - Pricing (flatFee, hourlyRate)
- *  - About (multi-line, no char limit)
- *  - Badges (comma-separated text field)
  *  - Save button → PATCH /meProfile
  *  - Change tracking (only sends modified fields)
  *
@@ -103,19 +96,10 @@ fun ProfileScreen(
     var originalName by remember { mutableStateOf("") }
     var originalService by remember { mutableStateOf("") }
     var originalProfileImageUrl by remember { mutableStateOf("") }
-    var originalFlatFee by remember { mutableStateOf("") }
-    var originalHourlyRate by remember { mutableStateOf("") }
-    var originalAbout by remember { mutableStateOf("") }
-    var originalBadges by remember { mutableStateOf("") }
-
     // Editable states (mirrors iOS @State private vars)
     var name by remember { mutableStateOf("") }
     var service by remember { mutableStateOf("") }
     var profileImageUrl by remember { mutableStateOf("") }
-    var flatFee by remember { mutableStateOf("") }
-    var hourlyRate by remember { mutableStateOf("") }
-    var about by remember { mutableStateOf("") }
-    var badgeNames by remember { mutableStateOf("") }
 
     // UI state
     var isLoading by remember { mutableStateOf(true) }
@@ -277,9 +261,6 @@ fun ProfileScreen(
                                 name = details.optString("name", fullName)
                                 service = details.optString("service", "")
                                 profileImageUrl = details.optString("profileImage", "")
-                                flatFee = details.optString("flatFee", "")
-                                hourlyRate = details.optString("hourlyRate", "")
-                                about = details.optString("about", "")
 
                                 // Save rating from providerDetails (matches iOS profile.rating)
                                 val ratingValue = details.optDouble("rating", 5.0).toFloat()
@@ -288,30 +269,10 @@ fun ProfileScreen(
                                 // Persist profile image to AuthManager
                                 AuthManager.setProfileImageUrl(profileImageUrl)
 
-                                // Load badges as comma-separated string (matches iOS badgeNames)
-                                val badgesArray = details.optJSONArray("badges")
-                                if (badgesArray != null) {
-                                    val badges = mutableListOf<String>()
-                                    for (i in 0 until badgesArray.length()) {
-                                        // Handle badges that are either strings or objects with "name" field
-                                        val badge = badgesArray.get(i)
-                                        if (badge is String) {
-                                            badges.add(badge)
-                                        } else if (badge is JSONObject) {
-                                            badges.add(badge.optString("name", ""))
-                                        }
-                                    }
-                                    badgeNames = badges.joinToString(", ")
-                                }
-
                                 // Store originals for change tracking
                                 originalName = name
                                 originalService = service
                                 originalProfileImageUrl = profileImageUrl
-                                originalFlatFee = flatFee
-                                originalHourlyRate = hourlyRate
-                                originalAbout = about
-                                originalBadges = badgeNames
                             }
                         }
                     }
@@ -360,23 +321,6 @@ fun ProfileScreen(
                 if (profileImageUrl != originalProfileImageUrl) {
                     jsonObject.put("profileImage", profileImageUrl)
                 }
-                if (flatFee != originalFlatFee) {
-                    jsonObject.put("flatFee", flatFee.replace("$", ""))
-                }
-                if (hourlyRate != originalHourlyRate) {
-                    jsonObject.put("hourlyRate", hourlyRate.replace("$", ""))
-                }
-                if (about != originalAbout) {
-                    jsonObject.put("about", about.trim())
-                }
-                if (badgeNames != originalBadges) {
-                    // Send badges as array of objects (matches iOS format)
-                    val badgesArray = org.json.JSONArray()
-                    badgeNames.split(",").map { it.trim() }.filter { it.isNotEmpty() }.forEach { badge ->
-                        badgesArray.put(JSONObject().put("name", badge).put("color", "#85D9C4"))
-                    }
-                    jsonObject.put("badges", badgesArray)
-                }
 
                 // If no fields changed, don't make the request (matches iOS)
                 if (jsonObject.length() == 0) {
@@ -411,10 +355,6 @@ fun ProfileScreen(
                         originalName = name
                         originalService = service
                         originalProfileImageUrl = profileImageUrl
-                        originalFlatFee = flatFee
-                        originalHourlyRate = hourlyRate
-                        originalAbout = about
-                        originalBadges = badgeNames
 
                         // Persist profile image to AuthManager
                         AuthManager.setProfileImageUrl(profileImageUrl)
@@ -684,132 +624,6 @@ fun ProfileScreen(
                             )
                         }
 
-                        HorizontalDivider()
-
-                        // ── Pricing Section (matches iOS) ──
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.AttachMoney,
-                                    contentDescription = "Pricing",
-                                    tint = OrangeTitle,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Pricing",
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = OrangeSec7
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(15.dp))
-
-                            // Flat Fee (matches iOS "Flat Fee (e.g. $45)")
-                            ProfileInputField(
-                                placeholder = "Flat Fee (e.g. $45)",
-                                value = flatFee,
-                                onValueChange = { flatFee = it }
-                            )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            // Hourly Rate (matches iOS "Hourly Rate (e.g. $50/hr)")
-                            ProfileInputField(
-                                placeholder = "Hourly Rate (e.g. $50/hr)",
-                                value = hourlyRate,
-                                onValueChange = { hourlyRate = it }
-                            )
-                        }
-
-                        HorizontalDivider()
-
-                        // ── About Section (matches iOS with icon header) ──
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.ChatBubble,
-                                    contentDescription = "About",
-                                    tint = OrangeTitle,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "About",
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = OrangeSec7
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(15.dp))
-
-                            // Multi-line text field (matches iOS TextEditor, no char limit)
-                            OutlinedTextField(
-                                value = about,
-                                onValueChange = { about = it },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(100.dp),
-                                placeholder = {
-                                    Text(
-                                        "Tell customers about your services...",
-                                        color = Color.Gray.copy(alpha = 0.6f),
-                                        fontSize = 17.sp
-                                    )
-                                },
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color.Transparent,
-                                    unfocusedBorderColor = Color.Transparent,
-                                    focusedContainerColor = Color.White,
-                                    unfocusedContainerColor = Color.White
-                                ),
-                                shape = RoundedCornerShape(8.dp),
-                                textStyle = androidx.compose.ui.text.TextStyle(
-                                    fontSize = 17.sp,
-                                    color = OrangeSec7
-                                )
-                            )
-                        }
-
-                        HorizontalDivider()
-
-                        // ── Badges Section (matches iOS — comma-separated text field) ──
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Star,
-                                    contentDescription = "Badges",
-                                    tint = OrangeTitle,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Badges",
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = OrangeSec7
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Text(
-                                text = "Separate badge names with commas",
-                                fontSize = 14.sp,
-                                color = OrangeSec2
-                            )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            // Comma-separated text field (matches iOS TextField for badges)
-                            ProfileInputField(
-                                placeholder = "e.g. Background Check Cleared, Certified",
-                                value = badgeNames,
-                                onValueChange = { badgeNames = it }
-                            )
-                        }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
