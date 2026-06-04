@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ChatBubble
@@ -127,6 +128,96 @@ fun ProfileScreen(
 
     // Local image preview during upload
     var localImageUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Upload profile image: compress → upload to backend → update URL
+    suspend fun uploadProfileImage(uri: Uri) {
+        withContext(Dispatchers.IO) {
+            try {
+                withContext(Dispatchers.Main) { isUploading = true }
+
+                // Read image bytes from URI
+                val inputStream = context.contentResolver.openInputStream(uri) ?: run {
+                    withContext(Dispatchers.Main) {
+                        errorMessage = "Could not read image"
+                        showErrorDialog = true
+                        isUploading = false
+                    }
+                    return@withContext
+                }
+                val originalBytes = inputStream.readBytes()
+                inputStream.close()
+
+                // Compress: resize to max 1200px + JPEG 70% quality
+                val compressedBytes = compressAndResizeImage(originalBytes, maxDimension = 1200, quality = 70)
+                println("📸 Image compressed: ${originalBytes.size} bytes → ${compressedBytes.size} bytes")
+
+                val token = AuthManager.getToken(context) ?: run {
+                    withContext(Dispatchers.Main) {
+                        errorMessage = "Authentication required"
+                        showErrorDialog = true
+                        isUploading = false
+                    }
+                    return@withContext
+                }
+
+                // Upload via multipart POST to /upload/image
+                val boundary = "Boundary-${System.currentTimeMillis()}"
+                val url = URL("${Config.API_BASE_URL}/upload/image")
+                val conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    setRequestProperty("Authorization", "Bearer $token")
+                    setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                    connectTimeout = 30000
+                    readTimeout = 30000
+                }
+
+                val fileName = "profile_${System.currentTimeMillis()}.jpg"
+                val body = ByteArrayOutputStream()
+                body.write("--$boundary\r\n".toByteArray())
+                body.write("Content-Disposition: form-data; name=\"image\"; filename=\"$fileName\"\r\n".toByteArray())
+                body.write("Content-Type: image/jpeg\r\n\r\n".toByteArray())
+                body.write(compressedBytes)
+                body.write("\r\n--$boundary--\r\n".toByteArray())
+
+                conn.outputStream.use { os ->
+                    os.write(body.toByteArray())
+                    os.flush()
+                }
+
+                val statusCode = conn.responseCode
+                if (statusCode == 200) {
+                    val response = conn.inputStream.bufferedReader().readText()
+                    val json = JSONObject(response)
+                    val uploadedUrl = json.optString("url", "")
+                    conn.disconnect()
+
+                    withContext(Dispatchers.Main) {
+                        if (uploadedUrl.isNotEmpty()) {
+                            profileImageUrl = uploadedUrl
+                            AuthManager.setProfileImageUrl(uploadedUrl)
+                            println("✅ Profile image uploaded: $uploadedUrl")
+                        }
+                        isUploading = false
+                    }
+                } else {
+                    val errorBody = conn.errorStream?.bufferedReader()?.readText() ?: "HTTP $statusCode"
+                    conn.disconnect()
+                    withContext(Dispatchers.Main) {
+                        errorMessage = "Upload failed: $errorBody"
+                        showErrorDialog = true
+                        isUploading = false
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    errorMessage = "Upload error: ${e.localizedMessage}"
+                    showErrorDialog = true
+                    isUploading = false
+                }
+            }
+        }
+    }
 
     // Image picker launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
@@ -344,96 +435,6 @@ fun ProfileScreen(
         }
     }
 
-    // Upload profile image: compress → upload to backend → update URL
-    suspend fun uploadProfileImage(uri: Uri) {
-        withContext(Dispatchers.IO) {
-            try {
-                withContext(Dispatchers.Main) { isUploading = true }
-
-                // Read image bytes from URI
-                val inputStream = context.contentResolver.openInputStream(uri) ?: run {
-                    withContext(Dispatchers.Main) {
-                        errorMessage = "Could not read image"
-                        showErrorDialog = true
-                        isUploading = false
-                    }
-                    return@withContext
-                }
-                val originalBytes = inputStream.readBytes()
-                inputStream.close()
-
-                // Compress: resize to max 1200px + JPEG 70% quality
-                val compressedBytes = compressAndResizeImage(originalBytes, maxDimension = 1200, quality = 70)
-                println("📸 Image compressed: ${originalBytes.size} bytes → ${compressedBytes.size} bytes")
-
-                val token = AuthManager.getToken(context) ?: run {
-                    withContext(Dispatchers.Main) {
-                        errorMessage = "Authentication required"
-                        showErrorDialog = true
-                        isUploading = false
-                    }
-                    return@withContext
-                }
-
-                // Upload via multipart POST to /upload/image
-                val boundary = "Boundary-${System.currentTimeMillis()}"
-                val url = URL("${Config.API_BASE_URL}/upload/image")
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    doOutput = true
-                    setRequestProperty("Authorization", "Bearer $token")
-                    setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-                    connectTimeout = 30000
-                    readTimeout = 30000
-                }
-
-                val fileName = "profile_${System.currentTimeMillis()}.jpg"
-                val body = ByteArrayOutputStream()
-                body.write("--$boundary\r\n".toByteArray())
-                body.write("Content-Disposition: form-data; name=\"image\"; filename=\"$fileName\"\r\n".toByteArray())
-                body.write("Content-Type: image/jpeg\r\n\r\n".toByteArray())
-                body.write(compressedBytes)
-                body.write("\r\n--$boundary--\r\n".toByteArray())
-
-                conn.outputStream.use { os ->
-                    os.write(body.toByteArray())
-                    os.flush()
-                }
-
-                val statusCode = conn.responseCode
-                if (statusCode == 200) {
-                    val response = conn.inputStream.bufferedReader().readText()
-                    val json = JSONObject(response)
-                    val uploadedUrl = json.optString("url", "")
-                    conn.disconnect()
-
-                    withContext(Dispatchers.Main) {
-                        if (uploadedUrl.isNotEmpty()) {
-                            profileImageUrl = uploadedUrl
-                            AuthManager.setProfileImageUrl(uploadedUrl)
-                            println("✅ Profile image uploaded: $uploadedUrl")
-                        }
-                        isUploading = false
-                    }
-                } else {
-                    val errorBody = conn.errorStream?.bufferedReader()?.readText() ?: "HTTP $statusCode"
-                    conn.disconnect()
-                    withContext(Dispatchers.Main) {
-                        errorMessage = "Upload failed: $errorBody"
-                        showErrorDialog = true
-                        isUploading = false
-                    }
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    errorMessage = "Upload error: ${e.localizedMessage}"
-                    showErrorDialog = true
-                    isUploading = false
-                }
-            }
-        }
-    }
-
     // Trigger fetch on load
     remember {
         scope.launch { fetchProfile() }
@@ -471,7 +472,7 @@ fun ProfileScreen(
                 ) {
                     IconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = OrangeTitle,
                             modifier = Modifier.size(24.dp)
