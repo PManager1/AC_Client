@@ -72,7 +72,7 @@ private val OrangeSec3 = Color(0xFFFF9500)
 enum class AccountPage {
     Main, Help, Wallet, Pass, ManageAccount, SignIn, SignOut, DeleteAccount, Profile,
     Settings, Referral, ReferralCode, Notifications, Language, BugReporter,
-    TestPages, ChatView
+    TestPages, ChatView, VerifyOtp
 }
 
 // Matches iOS ProfessionalSettings.swift
@@ -83,6 +83,8 @@ fun AccountScreen(
     var currentPage by remember { mutableStateOf(AccountPage.Main) }
     // Bump this after login/logout to force recomposition of profile card
     var refreshKey by remember { mutableStateOf(0) }
+    // Store phone number for OTP verification screen
+    var otpPhoneNumber by remember { mutableStateOf("") }
     val context = LocalContext.current
 
     // Route to the correct sub-page
@@ -98,8 +100,19 @@ fun AccountScreen(
         )
         AccountPage.SignIn -> SignInScreen(
             onBack = { currentPage = AccountPage.ManageAccount },
-            onOtpSent = { /* TODO: navigate to OTP verification */ },
+            onOtpSent = { phone ->
+                otpPhoneNumber = phone
+                currentPage = AccountPage.VerifyOtp
+            },
             onGuestLogin = {
+                refreshKey++                        // Force profile refresh
+                currentPage = AccountPage.Main      // Matches iOS: dismiss → home tab
+            }
+        )
+        AccountPage.VerifyOtp -> VerifyOtpScreen(
+            phoneNumber = otpPhoneNumber,
+            onBack = { currentPage = AccountPage.SignIn },
+            onVerified = {
                 refreshKey++                        // Force profile refresh
                 currentPage = AccountPage.Main      // Matches iOS: dismiss → home tab
             }

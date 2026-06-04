@@ -179,9 +179,15 @@ fun SignInScreen(
             Button(
                 onClick = {
                     loading = true
-                    // TODO: call API to send OTP
-                    onOtpSent(phoneNumber)
-                    loading = false
+                    scope.launch {
+                        val result = handleSendOTP(phoneNumber)
+                        loading = false
+                        if (result.first) {
+                            onOtpSent(phoneNumber)
+                        } else {
+                            errorMessage = result.second
+                        }
+                    }
                 },
                 enabled = isValidPhoneNumber(phoneNumber),
                 modifier = Modifier
@@ -286,6 +292,43 @@ fun SignInScreen(
                 }
             }
         )
+    }
+}
+
+// ── Send OTP — mirrors iOS handleSendOTP() ──────────────────
+// Returns (success: Boolean, message: String)
+private suspend fun handleSendOTP(phoneNumber: String): Pair<Boolean, String> {
+    return withContext(Dispatchers.IO) {
+        try {
+            // Strip dashes, prepend +1 (matches iOS: cleanedNumber + "+1" prefix)
+            val cleanedNumber = phoneNumber.filter { it.isDigit() }
+            val finalNumber = "+1$cleanedNumber"
+
+            val url = URL("${Config.API_BASE_URL}/send-otp-aws")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                setRequestProperty("Content-Type", "application/json")
+                doOutput = true
+                connectTimeout = 15000
+                readTimeout = 15000
+            }
+
+            val body = """{"phoneNumber":"$finalNumber"}"""
+            conn.outputStream.use { os ->
+                os.write(body.toByteArray(Charsets.UTF_8))
+            }
+
+            val statusCode = conn.responseCode
+            conn.disconnect()
+
+            if (statusCode == 200) {
+                Pair(true, "OTP sent")
+            } else {
+                Pair(false, "Failed to send OTP (HTTP $statusCode)")
+            }
+        } catch (e: Exception) {
+            Pair(false, "Connection error: ${e.localizedMessage}")
+        }
     }
 }
 
