@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,21 +24,27 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -111,6 +118,7 @@ fun ProfileScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showErrorDialog by remember { mutableStateOf(false) }
     var showSuccessDialog by remember { mutableStateOf(false) }
+    var showPhoneSheet by remember { mutableStateOf(false) }
 
     // Local image preview during upload
     var localImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -632,12 +640,50 @@ fun ProfileScreen(
 
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            // Phone Number
-                            ProfileInputField(
-                                placeholder = "Phone Number",
-                                value = phoneNumber,
-                                onValueChange = { phoneNumber = it }
-                            )
+                            // Phone Number — read-only with pencil icon to open change sheet
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = phoneNumber,
+                                    onValueChange = { /* read-only */ },
+                                    placeholder = {
+                                        Text("Phone Number", color = Color.Gray.copy(alpha = 0.6f), fontSize = 17.sp)
+                                    },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .shadow(2.dp, RoundedCornerShape(8.dp)),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(8.dp),
+                                    readOnly = true,
+                                    enabled = false,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedContainerColor = Color.White,
+                                        unfocusedContainerColor = Color.White.copy(alpha = 0.6f),
+                                        focusedBorderColor = Color.Transparent,
+                                        unfocusedBorderColor = Color.Transparent,
+                                        disabledContainerColor = Color.White.copy(alpha = 0.6f),
+                                        disabledBorderColor = Color.Transparent
+                                    ),
+                                    textStyle = androidx.compose.ui.text.TextStyle(
+                                        fontSize = 17.sp,
+                                        color = OrangeSec7
+                                    )
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                IconButton(
+                                    onClick = { showPhoneSheet = true },
+                                    modifier = Modifier.offset(y = 4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "Change Phone",
+                                        tint = OrangeTitle,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
                         }
 
                     }
@@ -710,6 +756,14 @@ fun ProfileScreen(
             }
         )
     }
+
+    // ── Phone Change Bottom Sheet (matches iOS PhoneChangeSheet) ──
+    if (showPhoneSheet) {
+        PhoneChangeSheet(
+            currentPhone = phoneNumber,
+            onDismiss = { showPhoneSheet = false }
+        )
+    }
 }
 
 // MARK: - Image Compression Helper
@@ -773,4 +827,253 @@ private fun ProfileInputField(
             color = OrangeSec7
         )
     )
+}
+
+// MARK: - Phone Change Bottom Sheet (matches iOS PhoneChangeSheet)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PhoneChangeSheet(
+    currentPhone: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    var newPhone by remember { mutableStateOf("") }
+    var isSubmitting by remember { mutableStateOf(false) }
+    var showError by remember { mutableStateOf(false) }
+    var showSuccess by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf("") }
+
+    fun formatPhone(input: String): String {
+        val digits = input.filter { it.isDigit() }.take(10)
+        return when {
+            digits.length >= 7 -> "${digits.substring(0, 3)}-${digits.substring(3, 6)}-${digits.substring(6)}"
+            digits.length >= 4 -> "${digits.substring(0, 3)}-${digits.substring(3)}"
+            else -> digits
+        }
+    }
+
+    val isValid = newPhone.filter { it.isDigit() }.length == 10
+
+    fun submitRequest() {
+        val rawDigits = newPhone.filter { it.isDigit() }
+        if (rawDigits.length != 10) {
+            errorMsg = "Please enter a valid 10-digit phone number"
+            showError = true
+            return
+        }
+
+        val token = AuthManager.getToken(context)
+        if (token == null) {
+            errorMsg = "Authentication required"
+            showError = true
+            return
+        }
+
+        isSubmitting = true
+        scope.launch {
+            try {
+                val statusCode = withContext(Dispatchers.IO) {
+                    val url = URL("${Config.API_BASE_URL}/request-phone-change")
+                    val conn = (url.openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"
+                        setRequestProperty("Content-Type", "application/json")
+                        setRequestProperty("Authorization", "Bearer $token")
+                        doOutput = true
+                        connectTimeout = 15000
+                        readTimeout = 15000
+                    }
+
+                    val payload = JSONObject().apply {
+                        put("currentPhone", currentPhone)
+                        put("newPhone", newPhone)
+                    }
+                    conn.outputStream.use { os ->
+                        os.write(payload.toString().toByteArray(Charsets.UTF_8))
+                    }
+
+                    val code = conn.responseCode
+                    conn.disconnect()
+                    code
+                }
+
+                isSubmitting = false
+                if (statusCode == 200) {
+                    showSuccess = true
+                } else {
+                    errorMsg = "Server error. Please try again."
+                    showError = true
+                }
+            } catch (e: Exception) {
+                isSubmitting = false
+                errorMsg = e.localizedMessage ?: "Network error"
+                showError = true
+            }
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = Color.White
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.7f)
+                .padding(horizontal = 16.dp)
+        ) {
+            // Title
+            Text(
+                text = "Change Phone Number",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = OrangeSec7,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+
+            // Info card: current phone + message
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF2F2F7), RoundedCornerShape(10.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Phone,
+                        contentDescription = "Phone",
+                        tint = OrangeTitle,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Current:",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = OrangeSec2
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (currentPhone.isBlank()) "Not set" else currentPhone,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = OrangeSec7
+                    )
+                }
+
+                Text(
+                    text = "Enter your new phone number below. Our team will review and update it within 24 hours.",
+                    fontSize = 14.sp,
+                    color = OrangeSec2
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // New phone input
+            Text(
+                text = "New Phone Number",
+                fontSize = 14.sp,
+                color = OrangeSec2,
+                modifier = Modifier.padding(bottom = 5.dp)
+            )
+            OutlinedTextField(
+                value = newPhone,
+                onValueChange = { raw ->
+                    val formatted = formatPhone(raw)
+                    if (formatted != newPhone) newPhone = formatted
+                },
+                placeholder = {
+                    Text("(123) 456-7890", color = Color.Gray.copy(alpha = 0.5f), fontSize = 17.sp)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .shadow(2.dp, RoundedCornerShape(8.dp)),
+                singleLine = true,
+                shape = RoundedCornerShape(8.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White,
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent
+                ),
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    fontSize = 17.sp,
+                    color = OrangeSec7
+                )
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Submit button
+            Button(
+                onClick = { submitRequest() },
+                enabled = isValid && !isSubmitting,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isValid) OrangeTitle else Color.Gray.copy(alpha = 0.4f),
+                    disabledContainerColor = Color.Gray.copy(alpha = 0.4f)
+                ),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                if (isSubmitting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text(
+                    text = if (isSubmitting) "Submitting..." else "Submit Request",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+        }
+    }
+
+    // Success dialog
+    if (showSuccess) {
+        AlertDialog(
+            onDismissRequest = {
+                showSuccess = false
+                onDismiss()
+            },
+            title = { Text("Request Submitted!", fontWeight = FontWeight.Bold) },
+            text = { Text("Our team has been notified. We'll update your phone number within 24 hours and confirm via email.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showSuccess = false
+                    onDismiss()
+                }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    // Error dialog
+    if (showError) {
+        AlertDialog(
+            onDismissRequest = { showError = false },
+            title = { Text("Error", fontWeight = FontWeight.Bold) },
+            text = { Text(errorMsg) },
+            confirmButton = {
+                TextButton(onClick = { showError = false }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
 }

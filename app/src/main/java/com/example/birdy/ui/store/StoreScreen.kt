@@ -78,23 +78,39 @@ fun StoreScreen(
     var selectedItem by remember { mutableStateOf<StoreMenuItem?>(null) }
     var showRestaurantInfo by remember { mutableStateOf(false) }
 
-    // Load data: API if restaurantId provided, else local JSON
+    // Load data: two-phase — quick brand fetch dismisses skeleton, then full fetch loads menu
     val context = LocalContext.current
     LaunchedEffect(restaurantId) {
         isLoading = true
         loadError = false
         try {
             if (restaurantId.isNotEmpty()) {
-                storeData = fetchStoreDetail(restaurantId, storeName = storeName, context = context)
+                // Phase 1: Quick brand fetch (banner + name only) → dismiss skeleton early
+                val quickData = fetchBrandQuick(restaurantId)
+                if (quickData != null) {
+                    storeData = quickData
+                    isLoading = false
+                    CartManager.restaurantId = restaurantId
+                    CartManager.restaurantName = quickData.brand_info.name
+                }
+                // Phase 2: Full fetch (menu + location + delivery info)
+                val fullData = fetchStoreDetail(restaurantId, storeName = storeName, context = context)
+                if (fullData != null) {
+                    storeData = fullData
+                    CartManager.restaurantId = restaurantId
+                    CartManager.restaurantName = fullData.brand_info.name
+                } else if (quickData == null) {
+                    loadError = true
+                }
             } else if (jsonInputStream != null) {
                 storeData = loadStoreData(jsonInputStream)
+                if (storeData == null) loadError = true
+                if (storeData != null) {
+                    CartManager.restaurantId = restaurantId
+                    CartManager.restaurantName = storeData!!.brand_info.name
+                }
             }
-            if (storeData == null) loadError = true
-            // Set cart restaurant context — matches iOS setting cart.restaurantId
-            if (storeData != null) {
-                CartManager.restaurantId = restaurantId
-                CartManager.restaurantName = storeData!!.brand_info.name
-            }
+            if (storeData == null && restaurantId.isEmpty()) loadError = true
         } catch (e: Exception) {
             loadError = true
         }

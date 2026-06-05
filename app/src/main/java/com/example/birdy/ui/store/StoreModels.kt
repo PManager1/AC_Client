@@ -20,7 +20,10 @@ data class StoreLocationInfo(
     val phone: String? = null,
     val operating_hours: Map<String, String>? = null,
     val latitude: Double = 0.0,
-    val longitude: Double = 0.0
+    val longitude: Double = 0.0,
+    val delivery_enabled: Boolean? = null,
+    val pickup_enabled: Boolean? = null,
+    val delivery_radius: Double? = null
 )
 
 data class StoreMenuCategory(

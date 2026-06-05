@@ -477,20 +477,38 @@ fun StoreInfo(
             modifier = Modifier.padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Delivery Fee Card
+            // Delivery Fee Card — contextual based on delivery_enabled
+            val deliveryEnabled = data.location_info.delivery_enabled
+            val deliveryCardTitle = when {
+                deliveryEnabled == true && data.location_info.delivery_fee == 0.0 -> "Free Delivery"
+                deliveryEnabled == true -> "$${String.format("%.2f", data.location_info.delivery_fee)}"
+                deliveryEnabled == false -> "Unavailable"
+                else -> if (data.location_info.delivery_fee == 0.0) "Free Delivery"
+                        else "$${String.format("%.2f", data.location_info.delivery_fee)}"
+            }
+            val deliveryCardSubtitle = when {
+                deliveryEnabled == true -> "delivery available"
+                deliveryEnabled == false -> "delivery disabled"
+                else -> "delivery fee"
+            }
             ModernInfoCard(
-                title = if (data.location_info.delivery_fee == 0.0) "Free Delivery"
-                else "$${String.format("%.2f", data.location_info.delivery_fee)}",
-                subtitle = "delivery fee",
+                title = deliveryCardTitle,
+                subtitle = deliveryCardSubtitle,
                 icon = Icons.Default.DirectionsBike,
-                color = BurntOrange,
+                color = if (deliveryEnabled == false) Color.Gray else BurntOrange,
                 modifier = Modifier.weight(1f)
             )
 
-            // Delivery Time Card
+            // Delivery Time Card — shows pickup badge when both enabled
+            val pickupEnabled = data.location_info.pickup_enabled
+            val timeCardSubtitle = when {
+                pickupEnabled == true && deliveryEnabled == true -> "pickup & delivery"
+                pickupEnabled == true -> "pickup available"
+                else -> "est. time"
+            }
             ModernInfoCard(
                 title = data.location_info.delivery_time_est,
-                subtitle = "est. time",
+                subtitle = timeCardSubtitle,
                 icon = Icons.Default.Schedule,
                 color = BurntOrange,
                 modifier = Modifier.weight(1f)
