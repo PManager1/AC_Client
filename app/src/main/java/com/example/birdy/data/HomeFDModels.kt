@@ -284,25 +284,4 @@ object HomeFDData {
 
         return HomeFeedData(featuredBanners = banners, sections = sections)
     }
-
-    // Legacy static sections (kept for fallback)
-    val section1Restaurants = listOf(
-        DeliveryRestaurant("Taco Bell", 4.0, "6k+", "1.5 mi", "30 min", "$0"),
-        DeliveryRestaurant("Chick-A-Licious", 4.2, "1k+", "2.1 mi", "25 min", "$0")
-    )
-
-    val section2Restaurants = listOf(
-        DeliveryRestaurant("Taco Bell", 4.0, "6k+", "1.5 mi", "30 min", "$0"),
-        DeliveryRestaurant("Chick-A-Licious", 4.2, "1k+", "2.1 mi", "25 min", "$0")
-    )
-
-    val section3Restaurants = listOf(
-        DeliveryRestaurant("Taco Bell", 4.0, "6k+", "1.5 mi", "30 min", "$0"),
-        DeliveryRestaurant("Chick-A-Licious", 4.2, "1k+", "2.1 mi", "25 min", "$0")
-    )
-
-    val section4Restaurants = listOf(
-        DeliveryRestaurant("Taco Bell", 4.0, "6k+", "1.5 mi", "30 min", "$0"),
-        DeliveryRestaurant("Chick-A-Licious", 4.2, "1k+", "2.1 mi", "25 min", "$0")
-    )
 }
