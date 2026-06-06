@@ -38,6 +38,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,10 +47,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.birdy.data.AddressService
+import com.example.birdy.data.AuthManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 // MARK: - Address Model (matches iOS Address with gateCode)
 
@@ -58,15 +64,9 @@ data class Address(
     val street: String,
     val cityStateZip: String,
     val gateCode: String? = null,
-    val isDefault: Boolean = false
-)
-
-// MARK: - Mock Addresses (will be replaced with AddressService API calls later)
-
-private val mockAddresses = listOf(
-    Address(id = "addr_1", street = "123 Main Street, Apt 4B", cityStateZip = "New York, NY 10001", gateCode = "#1234", isDefault = true),
-    Address(id = "addr_2", street = "456 Broadway, Floor 12", cityStateZip = "New York, NY 10003", isDefault = false),
-    Address(id = "addr_3", street = "789 Oak Avenue", cityStateZip = "Brooklyn, NY 11201", gateCode = "call manager", isDefault = false)
+    val isDefault: Boolean = false,
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0
 )
 
 // MARK: - Select Address Bottom Sheet (matches iOS SelectAddress)
@@ -82,7 +82,10 @@ fun SelectAddressSheet(
         skipPartiallyExpanded = true
     )
 
+    val context = LocalContext.current
     var selectedId by remember { mutableStateOf(currentAddressId) }
+    var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     // Gate code states
     var showGateCodeSheet by remember { mutableStateOf(false) }
@@ -90,8 +93,27 @@ fun SelectAddressSheet(
     var editingAddressId by remember { mutableStateOf<String?>(null) }
     var isAddingNewAddress by remember { mutableStateOf(false) }
 
-    // Local mutable addresses list (so we can update gate codes)
-    val localAddresses = remember { mutableStateListOf(*mockAddresses.toTypedArray()) }
+    // Addresses fetched from API
+    val localAddresses = remember { mutableStateListOf<Address>() }
+
+    LaunchedEffect(Unit) {
+        val token = AuthManager.getToken(context)
+        if (token.isNullOrEmpty()) {
+            errorMessage = "Not authenticated"
+            isLoading = false
+            return@LaunchedEffect
+        }
+        try {
+            val fetched = withContext(Dispatchers.IO) {
+                AddressService.getAddresses(token)
+            }
+            localAddresses.clear()
+            localAddresses.addAll(fetched)
+        } catch (e: Exception) {
+            errorMessage = "Failed to load addresses"
+        }
+        isLoading = false
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -154,49 +176,66 @@ fun SelectAddressSheet(
 
             HorizontalDivider(color = Color.Gray.copy(alpha = 0.2f))
 
-            // Scrollable address list
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Current Location option
-                AddressSelectionRow(
-                    title = "Current Location",
-                    subtitle = "Use your GPS location",
-                    icon = Icons.Default.LocationOn,
-                    gateCode = null,
-                    isSelected = selectedId == "current_location",
-                    onClick = {
-                        selectedId = "current_location"
-                        onAddressSelected(
-                            Address(
-                                id = "current_location",
-                                street = "Current Location",
-                                cityStateZip = "Using GPS"
-                            )
-                        )
-                        onDismiss()
-                    }
-                )
-
-                HorizontalDivider(
-                    modifier = Modifier.padding(vertical = 4.dp),
-                    color = Color.Gray.copy(alpha = 0.2f)
-                )
-
-                // Saved addresses
-                localAddresses.forEach { address ->
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(vertical = 40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Loading addresses...",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.Gray
+                    )
+                }
+            } else {
+                // Scrollable address list
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Current Location option
                     AddressSelectionRow(
-                        title = address.street,
-                        subtitle = address.cityStateZip,
-                        icon = if (address.isDefault) Icons.Default.Star else Icons.Default.LocationOn,
-                        gateCode = address.gateCode,
-                        isSelected = selectedId == address.id,
+                        title = "Current Location",
+                        subtitle = "Use your GPS location",
+                        icon = Icons.Default.LocationOn,
+                        gateCode = null,
+                        isSelected = selectedId == "current_location",
                         onClick = {
-                            selectedId = address.id
+                            selectedId = "current_location"
+                            onAddressSelected(
+                                Address(
+                                    id = "current_location",
+                                    street = "Current Location",
+                                    cityStateZip = "Using GPS"
+                                )
+                            )
+                            onDismiss()
+                        }
+                    )
+
+                    if (localAddresses.isNotEmpty()) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 4.dp),
+                            color = Color.Gray.copy(alpha = 0.2f)
+                        )
+                    }
+
+                    // Saved addresses
+                    localAddresses.forEach { address ->
+                        AddressSelectionRow(
+                            title = address.street,
+                            subtitle = address.cityStateZip,
+                            icon = if (address.isDefault) Icons.Default.Star else Icons.Default.LocationOn,
+                            gateCode = address.gateCode,
+                            isSelected = selectedId == address.id,
+                            onClick = {
+                                selectedId = address.id
                             onAddressSelected(address)
                             onDismiss()
                         },
@@ -246,6 +285,7 @@ fun SelectAddressSheet(
                 }
 
                 Spacer(modifier = Modifier.height(40.dp))
+                }
             }
         }
     }
