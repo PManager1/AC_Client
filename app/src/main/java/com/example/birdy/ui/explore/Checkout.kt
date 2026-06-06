@@ -95,24 +95,6 @@ fun CheckoutScreen(
     onBack: () -> Unit,
     onTrackOrder: () -> Unit = {}
 ) {
-    // Mock data — matches iOS addresses/paymentMethods
-    val addresses = remember {
-        listOf(
-            DeliveryAddress(
-                id = "home",
-                title = "Home",
-                fullAddress = "123 Main Street, Apt 4B, New York, NY 10001",
-                instructions = "Ring bell 3 times"
-            ),
-            DeliveryAddress(
-                id = "work",
-                title = "Work",
-                fullAddress = "456 Broadway, Floor 12, New York, NY 10003",
-                instructions = "Security will buzz you in"
-            )
-        )
-    }
-
     val paymentMethods = remember {
         listOf(
             PaymentMethod(id = "gpay", type = "Google Pay", last4 = null, brandIcon = "gpay"),
@@ -123,7 +105,8 @@ fun CheckoutScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var selectedAddress by remember { mutableStateOf(addresses.first()) }
+    var selectedAddress by remember { mutableStateOf<DeliveryAddress?>(null) }
+    var isLoadingAddresses by remember { mutableStateOf(true) }
     var showSelectAddress by remember { mutableStateOf(false) }
     var selectedPayment by remember { mutableStateOf(paymentMethods.first()) }
     var tipAmount by remember { mutableStateOf(4.0) }
@@ -136,6 +119,34 @@ fun CheckoutScreen(
     var selectedMode by remember { mutableStateOf("Delivery") }
 
     val totalWithTip = CartManager.total + tipAmount
+
+    // MARK: - Load Addresses from Backend (matches iOS loadAddresses)
+    LaunchedEffect(Unit) {
+        val token = AuthManager.getToken(context)
+        if (token.isNullOrEmpty()) {
+            isLoadingAddresses = false
+            return@LaunchedEffect
+        }
+        try {
+            val loadedAddresses = withContext(Dispatchers.IO) {
+                AddressService.getAddresses(token)
+            }
+            if (loadedAddresses.isNotEmpty()) {
+                val defaultAddr = loadedAddresses.firstOrNull { it.isDefault }
+                    ?: loadedAddresses.first()
+                selectedAddress = DeliveryAddress(
+                    id = defaultAddr.id,
+                    title = if (defaultAddr.isDefault) "Home" else defaultAddr.street,
+                    fullAddress = "${defaultAddr.street}, ${defaultAddr.cityStateZip}",
+                    instructions = defaultAddr.gateCode ?: ""
+                )
+                println("✅ [Checkout] Auto-selected address: ${defaultAddr.street}")
+            }
+        } catch (e: Exception) {
+            println("❌ [Checkout] Failed to load addresses: ${e.message}")
+        }
+        isLoadingAddresses = false
+    }
 
     // MARK: - Place Order — calls POST /orders (matches iOS handlePlaceOrder)
     suspend fun handlePlaceOrder() {
@@ -165,10 +176,17 @@ fun CheckoutScreen(
 
             val restaurantName = CartManager.items.firstOrNull()?.restaurantName ?: "Unknown Restaurant"
 
+            val addr = selectedAddress
+            if (addr == null) {
+                errorMessage = "Please select a delivery address."
+                isPlacingOrder = false
+                return
+            }
+
             val addressDict = JSONObject().apply {
-                put("street", selectedAddress.fullAddress)
+                put("street", addr.fullAddress)
                 put("cityStateZip", "")
-                put("isDefault", selectedAddress.id == "home")
+                put("isDefault", addr.id == "home")
             }
 
             val orderPayload = JSONObject().apply {
@@ -340,17 +358,67 @@ fun CheckoutScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Delivery Address section
-                    DeliveryAddressSection(
-                        selectedAddress = selectedAddress,
-                        onAddressTap = { showSelectAddress = true },
-                        leaveAtDoor = leaveAtDoor,
-                        onLeaveAtDoorChanged = { leaveAtDoor = it }
-                    )
+                    if (isLoadingAddresses) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Loading address...",
+                                fontSize = 15.sp,
+                                color = Color.Gray
+                            )
+                        }
+                    } else if (selectedAddress != null) {
+                        DeliveryAddressSection(
+                            selectedAddress = selectedAddress!!,
+                            onAddressTap = { showSelectAddress = true },
+                            leaveAtDoor = leaveAtDoor,
+                            onLeaveAtDoorChanged = { leaveAtDoor = it }
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                        ) {
+                            Text(
+                                text = "Delivery Address",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color.White, RoundedCornerShape(16.dp))
+                                    .clickable { showSelectAddress = true }
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    tint = Color(0xFFCC5500),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "Select a delivery address",
+                                    fontSize = 15.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
+                    }
 
-                    // Address selection bottom sheet (uses proper SelectAddressSheet from fooddelivery/)
+                    // Address selection bottom sheet
                     if (showSelectAddress) {
                         SelectAddressSheet(
-                            currentAddressId = selectedAddress.id,
+                            currentAddressId = selectedAddress?.id,
                             onAddressSelected = { address ->
                                 selectedAddress = DeliveryAddress(
                                     id = address.id,
