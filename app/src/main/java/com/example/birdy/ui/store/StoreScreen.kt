@@ -887,12 +887,6 @@ fun AisleCategoriesOverlay(
                         color = Color.Black,
                         modifier = Modifier.weight(1f)
                     )
-                    Text(
-                        text = "${category.items.size}",
-                        fontSize = 14.sp,
-                        color = Color.Gray
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = null,
