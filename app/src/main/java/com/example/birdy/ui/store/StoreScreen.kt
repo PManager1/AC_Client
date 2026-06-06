@@ -25,14 +25,37 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AcUnit
+import androidx.compose.material.icons.filled.BreakfastDining
+import androidx.compose.material.icons.filled.Cake
+import androidx.compose.material.icons.filled.CardGiftcard
+import androidx.compose.material.icons.filled.ChildCare
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Eco
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Fastfood
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.LocalBar
+import androidx.compose.material.icons.filled.LocalCafe
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pets
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.SmokingRooms
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -77,6 +100,8 @@ fun StoreScreen(
     var selectedMode by remember { mutableStateOf("Delivery") }
     var selectedItem by remember { mutableStateOf<StoreMenuItem?>(null) }
     var showRestaurantInfo by remember { mutableStateOf(false) }
+    var showAislesSheet by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
 
     // Load data: two-phase — quick brand fetch dismisses skeleton, then full fetch loads menu
     val context = LocalContext.current
@@ -601,8 +626,57 @@ fun StoreScreen(
 
                 Spacer(modifier = Modifier.height(30.dp))
 
+                // 4b. CATEGORY STRIP (horizontal scroll with menu icon) — matches iOS
+                if (data.menu.size > 1) {
+                    Row(
+                        modifier = Modifier
+                            .horizontalScroll(rememberScrollState())
+                            .padding(bottom = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Menu icon — opens aisles overlay
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFFF57C00).copy(alpha = 0.1f), RoundedCornerShape(50))
+                                .clickable { showAislesSheet = true }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "All Aisles",
+                                tint = Color(0xFFF57C00),
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        // "All" pill
+                        CategoryPill(
+                            title = "All",
+                            count = data.menu.sumOf { it.items.size },
+                            isSelected = selectedCategory == null
+                        ) {
+                            selectedCategory = null
+                        }
+                        // Category pills
+                        data.menu.forEach { cat ->
+                            CategoryPill(
+                                title = cat.category_name,
+                                count = cat.items.size,
+                                isSelected = selectedCategory == cat.category_name
+                            ) {
+                                selectedCategory = cat.category_name
+                            }
+                        }
+                    }
+                }
+
                 // 5. MENU CATEGORIES
-                data.menu.forEachIndexed { index, category ->
+                val filteredMenu = if (selectedCategory != null) {
+                    data.menu.filter { it.category_name == selectedCategory }
+                } else {
+                    data.menu
+                }
+                filteredMenu.forEachIndexed { index, category ->
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Text(
                             text = category.category_name,
@@ -716,6 +790,14 @@ fun StoreScreen(
         )
     }
 
+    // 7b. AISLE CATEGORIES OVERLAY (matches iOS AisleCategories)
+    if (showAislesSheet) {
+        AisleCategoriesOverlay(
+            menu = data.menu,
+            onDismiss = { showAislesSheet = false }
+        )
+    }
+
     // 8. ITEM DETAIL SHEET (matches iOS ItemDetailSheet)
     selectedItem?.let { item ->
         ItemDetailSheet(
@@ -727,6 +809,177 @@ fun StoreScreen(
                 selectedItem = null
             }
         )
+    }
+}
+
+// MARK: - Aisle Categories Overlay (matches iOS AisleCategories)
+@Composable
+fun AisleCategoriesOverlay(
+    menu: List<StoreMenuCategory>,
+    onDismiss: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+    ) {
+        // Header with close button and title
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(top = 26.dp, bottom = 12.dp)
+        ) {
+            Text(
+                text = "Aisles",
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                modifier = Modifier.align(Alignment.Center)
+            )
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.CenterStart)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close",
+                    tint = Color.Gray,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+        HorizontalDivider(color = Color.Gray.copy(alpha = 0.1f))
+        // Category list
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(top = 16.dp)
+        ) {
+            menu.forEachIndexed { index, category ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { /* TODO: navigate to aisle detail */ }
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Category icon
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(Color(0xFFF57C00).copy(alpha = 0.1f), RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = categoryIcon(category.category_name),
+                            contentDescription = null,
+                            tint = Color(0xFFF57C00),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = category.category_name,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "${category.items.size}",
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = Color.Gray,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                if (index < menu.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 76.dp),
+                        color = Color.Gray.copy(alpha = 0.1f)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(40.dp))
+        }
+    }
+}
+
+// MARK: - Category Pill (matches iOS CategoryPill)
+@Composable
+fun CategoryPill(
+    title: String,
+    count: Int,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val bgColor = if (isSelected) Color(0xFFF57C00).copy(alpha = 0.1f) else Color.Gray.copy(alpha = 0.06f)
+    val textColor = if (isSelected) Color(0xFFF57C00) else Color.Black
+    Box(
+        modifier = Modifier
+            .background(bgColor, RoundedCornerShape(50))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = if (count > 0) "$title ($count)" else title,
+            fontSize = 13.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = textColor
+        )
+    }
+}
+
+fun categoryIcon(name: String): androidx.compose.ui.graphics.vector.ImageVector {
+    val lower = name.lowercase()
+    return when {
+        lower.contains("beverage") || lower.contains("drink") || lower.contains("soda") || lower.contains("juice") || lower.contains("water") ->
+            Icons.Default.LocalCafe
+        lower.contains("snack") || lower.contains("chip") || lower.contains("cracker") ->
+            Icons.Default.Fastfood
+        lower.contains("dairy") || lower.contains("milk") || lower.contains("cheese") || lower.contains("yogurt") ->
+            Icons.Default.WaterDrop
+        lower.contains("produce") || lower.contains("fruit") || lower.contains("vegetable") || lower.contains("fresh") ->
+            Icons.Default.Eco
+        lower.contains("meat") || lower.contains("poultry") || lower.contains("chicken") || lower.contains("beef") ->
+            Icons.Default.LocalFireDepartment
+        lower.contains("bakery") || lower.contains("bread") || lower.contains("pastry") || lower.contains("cake") ->
+            Icons.Default.Cake
+        lower.contains("frozen") || lower.contains("ice cream") ->
+            Icons.Default.AcUnit
+        lower.contains("personal") || lower.contains("health") || lower.contains("beauty") || lower.contains("pharmacy") ->
+            Icons.Default.Favorite
+        lower.contains("household") || lower.contains("clean") || lower.contains("home") ->
+            Icons.Default.Home
+        lower.contains("baby") || lower.contains("diaper") || lower.contains("infant") ->
+            Icons.Default.ChildCare
+        lower.contains("pet") || lower.contains("dog") || lower.contains("cat") ->
+            Icons.Default.Pets
+        lower.contains("candy") || lower.contains("sweet") || lower.contains("chocolate") ->
+            Icons.Default.CardGiftcard
+        lower.contains("cereal") || lower.contains("breakfast") || lower.contains("oat") ->
+            Icons.Default.BreakfastDining
+        lower.contains("canned") || lower.contains("soup") || lower.contains("sauce") ->
+            Icons.Default.Inventory2
+        lower.contains("deli") || lower.contains("prepared") || lower.contains("hot food") ->
+            Icons.Default.Restaurant
+        lower.contains("alcohol") || lower.contains("beer") || lower.contains("wine") || lower.contains("liquor") ->
+            Icons.Default.LocalBar
+        lower.contains("tobacco") || lower.contains("cigarette") ->
+            Icons.Default.SmokingRooms
+        lower.contains("electronics") || lower.contains("phone") || lower.contains("tech") ->
+            Icons.Default.Devices
+        lower.contains("toys") || lower.contains("games") ->
+            Icons.Default.SportsEsports
+        else -> Icons.Default.GridView
     }
 }
 
