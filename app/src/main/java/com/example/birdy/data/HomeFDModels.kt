@@ -160,19 +160,19 @@ object HomeFDData {
     // Flat list of all categories (Food only, for backward compatibility)
     val categories = mainCategories.first { it.name == "Food" }.subcategories
 
-    // MARK: - Load Grocery Stores from API
+    // MARK: - Load Chain Brands (grocery/convenience/pharmacy) from API
 
     /** Blocking network call — must be called from a background thread */
     fun fetchGroceryStores(): List<GroceryStore> {
         return try {
-            val url = URL("$API_BASE_URL/grocery-stores")
+            val url = URL("$API_BASE_URL/brands")
             val connection = url.openConnection()
             connection.connectTimeout = 10_000
             connection.readTimeout = 15_000
             val json = connection.getInputStream().bufferedReader().use { it.readText() }
             parseGroceryStores(json)
         } catch (e: Exception) {
-            println("❌ [HomeFDData] Failed to fetch /grocery-stores: ${e.message}")
+            println("❌ [HomeFDData] Failed to fetch /brands: ${e.message}")
             emptyList()
         }
     }

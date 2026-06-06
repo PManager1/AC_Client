@@ -1,4 +1,4 @@
-// Matches iOS Home/PizzaHome.swift — fetches real data from /chains/brands/sectioned?tag=pizza
+// Matches iOS Home/PizzaHome.swift — fetches real data from /brands/sectioned?tag=pizza
 
 package com.example.birdy.ui.home
 
@@ -214,8 +214,8 @@ private suspend fun fetchPizzaPlaces(
 ) {
     withContext(Dispatchers.IO) {
         try {
-            // Build URL — matches iOS: /chains/brands/sectioned?tag=pizza[&type=restaurant]
-            var urlString = "${Config.API_BASE_URL}/chains/brands/sectioned?tag=pizza"
+            // Build URL — matches iOS: /brands/sectioned?tag=pizza[&type=restaurant]
+            var urlString = "${Config.API_BASE_URL}/brands/sectioned?tag=pizza"
             if (filter == "Restaurant") {
                 urlString += "&type=restaurant"
             }

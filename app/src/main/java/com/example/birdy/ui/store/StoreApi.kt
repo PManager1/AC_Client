@@ -320,7 +320,7 @@ private val mockStoreJSON = mapOf(
 suspend fun fetchBrandQuick(restaurantId: String): StoreData? {
     return withContext(Dispatchers.IO) {
         try {
-            val brandUrl = "${Config.API_BASE_URL}/chains/brands/$restaurantId"
+            val brandUrl = "${Config.API_BASE_URL}/brands/$restaurantId"
             val conn = java.net.URL(brandUrl).openConnection() as java.net.HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 5000
@@ -388,7 +388,7 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
 
         // 1. Try /nearest-store?lat=&lng= (single call → brand + location + menu)
         try {
-            val nearestUrl = "${Config.API_BASE_URL}/chains/brands/$restaurantId/nearest-store?lat=$lat&lng=$lng"
+            val nearestUrl = "${Config.API_BASE_URL}/brands/$restaurantId/nearest-store?lat=$lat&lng=$lng"
             Log.d("StoreApi", "➡️ Trying nearest-store: $nearestUrl")
             val conn = java.net.URL(nearestUrl).openConnection() as java.net.HttpURLConnection
             conn.requestMethod = "GET"
@@ -596,16 +596,16 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
             Log.w("StoreApi", "⚠️ /nearest-store failed: ${e.message}")
         }
 
-        // 2. Try chain brand API — fetches brand info + menu from /chains/brands/{id}
+        // 2. Try chain brand API — fetches brand info + menu from /brands/{id}
         try {
-            val brandUrl = "${Config.API_BASE_URL}/chains/brands/$restaurantId"
+            val brandUrl = "${Config.API_BASE_URL}/brands/$restaurantId"
             val brandConn = java.net.URL(brandUrl).openConnection() as java.net.HttpURLConnection
             brandConn.requestMethod = "GET"
             brandConn.connectTimeout = 10000
             brandConn.readTimeout = 10000
                     if (brandConn.responseCode == 200) {
                         val brandRawJson = brandConn.inputStream.bufferedReader().readText()
-                        Log.d("StoreApi", "📋 /chains/brands/{id} raw JSON (first 500): ${brandRawJson.take(500)}")
+                        Log.d("StoreApi", "📋 /brands/{id} raw JSON (first 500): ${brandRawJson.take(500)}")
                         val brandJson = JSONObject(brandRawJson)
                 val brandName = brandJson.optString("name", "")
                 val brandType = brandJson.optString("brandType", "")
@@ -624,9 +624,9 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                 // Try fetching menu for restaurant brands, or catalog for grocery brands
                 val menuCategories = mutableListOf<StoreMenuCategory>()
 
-                // Try restaurant menu: /chains/brands/{brandId}/menu
+                // Try restaurant menu: /brands/{brandId}/menu
                 try {
-                    val menuUrl = "${Config.API_BASE_URL}/chains/brands/$restaurantId/menu"
+                    val menuUrl = "${Config.API_BASE_URL}/brands/$restaurantId/menu"
                     val menuConn = java.net.URL(menuUrl).openConnection() as java.net.HttpURLConnection
                     menuConn.requestMethod = "GET"
                     menuConn.connectTimeout = 10000
@@ -729,10 +729,10 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                     println("⚠️ [StoreApi] Chain brand menu fetch failed: ${e.message}")
                 }
 
-                // Try grocery catalog if no menu categories found: /chains/brands/{brandId}/catalog
+                // Try grocery catalog if no menu categories found: /brands/{brandId}/catalog
                 if (menuCategories.isEmpty()) {
                     try {
-                        val catalogUrl = "${Config.API_BASE_URL}/chains/brands/$restaurantId/catalog"
+                        val catalogUrl = "${Config.API_BASE_URL}/brands/$restaurantId/catalog"
                         val catalogConn = java.net.URL(catalogUrl).openConnection() as java.net.HttpURLConnection
                         catalogConn.requestMethod = "GET"
                         catalogConn.connectTimeout = 10000
