@@ -433,12 +433,16 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                         distance = if (dist > 0) "${String.format("%.1f", dist)} mi" else ""
                         // Build full address: address, city, state zipCode
                         val addrParts = mutableListOf<String>()
-                        storeObj.optString("address", "").takeIf { it.isNotEmpty() }?.let { addrParts.add(it) }
-                        storeObj.optString("city", "").takeIf { it.isNotEmpty() }?.let { addrParts.add(it) }
-                        val state = storeObj.optString("state", "")
-                        val zipCode = storeObj.optString("zipCode", "")
-                        if (state.isNotEmpty()) {
-                            addrParts.add(if (zipCode.isNotEmpty()) "$state $zipCode" else state)
+                        val rawAddr = storeObj.optString("address", "")
+                        val rawCity = storeObj.optString("city", "")
+                        val rawState = storeObj.optString("state", "")
+                        val rawZipCode = storeObj.optString("zipCode", "")
+                        if (rawAddr.isNotEmpty()) addrParts.add(rawAddr)
+                        if (rawCity.isNotEmpty() && !rawAddr.contains(rawCity)) addrParts.add(rawCity)
+                        if (rawState.isNotEmpty() && !rawAddr.contains(rawState)) {
+                            addrParts.add(if (rawZipCode.isNotEmpty() && !rawAddr.contains(rawZipCode)) "$rawState $rawZipCode" else rawState)
+                        } else if (rawZipCode.isNotEmpty() && !rawAddr.contains(rawZipCode)) {
+                            addrParts.add(rawZipCode)
                         }
                         address = addrParts.joinToString(", ")
                         phone = storeObj.optString("phone", "").takeIf { it.isNotEmpty() }
