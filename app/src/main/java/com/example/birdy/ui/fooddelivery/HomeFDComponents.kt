@@ -15,12 +15,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -338,7 +342,7 @@ fun GroceryStoreCard(
 }
 
 // ============================================================================
-// MARK: - Grocery Store Horizontal List
+// MARK: - Grocery Store Grid (4 columns, matches IC LazyVGrid layout)
 // ============================================================================
 
 @Composable
@@ -347,11 +351,16 @@ fun GroceryStoreList(
     modifier: Modifier = Modifier,
     onStoreClick: (GroceryStore) -> Unit = {}
 ) {
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = modifier.padding(horizontal = 16.dp)
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(4),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier
+            .padding(horizontal = 16.dp)
+            .heightIn(max = 600.dp),
+        userScrollEnabled = false
     ) {
-        itemsIndexed(stores) { _, store ->
+        items(stores) { store ->
             GroceryStoreCard(
                 store = store,
                 onClick = { onStoreClick(store) }
