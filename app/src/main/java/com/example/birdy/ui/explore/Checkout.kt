@@ -29,6 +29,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -49,6 +50,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -60,12 +63,22 @@ import com.example.birdy.data.CartManager
 import com.example.birdy.data.Config
 import com.example.birdy.data.AddressService
 import com.example.birdy.ui.fooddelivery.Address
+import com.mapbox.geojson.Point
+import com.mapbox.maps.CameraOptions
+import com.mapbox.maps.MapInitOptions
+import com.mapbox.maps.MapView
+import com.mapbox.maps.plugin.annotation.annotations
+import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
+import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
+import com.mapbox.maps.plugin.gestures.gestures
 import com.example.birdy.ui.account.Wallet
 import com.example.birdy.ui.fooddelivery.SelectAddressSheet
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.runtime.derivedStateOf
+import com.example.birdy.data.LocationManager
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -77,7 +90,9 @@ data class DeliveryAddress(
     val id: String,
     val title: String,
     val fullAddress: String,
-    val instructions: String
+    val instructions: String,
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0
 )
 
 data class PaymentMethod(
@@ -117,8 +132,28 @@ fun CheckoutScreen(
     var showTipPage by remember { mutableStateOf(false) }
     var showWallet by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf("Delivery") }
+    var userLat by remember { mutableStateOf(0.0) }
+    var userLng by remember { mutableStateOf(0.0) }
+    var hasUserLocation by remember { mutableStateOf(false) }
+    var showLocationDialog by remember { mutableStateOf(false) }
 
     val totalWithTip = CartManager.total + tipAmount
+
+    val isUserFarFromAddress by remember(selectedAddress, userLat, userLng, hasUserLocation) {
+        derivedStateOf {
+            val addr = selectedAddress ?: return@derivedStateOf false
+            if (!hasUserLocation || addr.latitude == 0.0 || addr.longitude == 0.0) return@derivedStateOf false
+            val results = FloatArray(1)
+            android.location.Location.distanceBetween(
+                userLat, userLng,
+                addr.latitude, addr.longitude,
+                results
+            )
+            val distanceMiles = results[0] / 1609.344f
+            println("📍 [Checkout] Distance to address: ${String.format("%.4f", distanceMiles)} mi")
+            distanceMiles > 0.2f
+        }
+    }
 
     // MARK: - Load Addresses from Backend (matches iOS loadAddresses)
     LaunchedEffect(Unit) {
@@ -138,7 +173,9 @@ fun CheckoutScreen(
                     id = defaultAddr.id,
                     title = if (defaultAddr.isDefault) "Home" else defaultAddr.street,
                     fullAddress = "${defaultAddr.street}, ${defaultAddr.cityStateZip}",
-                    instructions = defaultAddr.gateCode ?: ""
+                    instructions = defaultAddr.gateCode ?: "",
+                    latitude = defaultAddr.latitude,
+                    longitude = defaultAddr.longitude
                 )
                 println("✅ [Checkout] Auto-selected address: ${defaultAddr.street}")
             }
@@ -146,6 +183,25 @@ fun CheckoutScreen(
             println("❌ [Checkout] Failed to load addresses: ${e.message}")
         }
         isLoadingAddresses = false
+    }
+
+    // MARK: - Fetch user location for distance validation
+    LaunchedEffect(Unit) {
+        try {
+            val (lat, lng) = withContext(Dispatchers.IO) {
+                LocationManager.fetchLocation(context)
+            }
+            if (lat != 0.0 && lng != 0.0) {
+                userLat = lat
+                userLng = lng
+                hasUserLocation = true
+                println("📍 [Checkout] User location: ($lat, $lng)")
+            } else {
+                println("⚠️ [Checkout] No user location available")
+            }
+        } catch (e: Exception) {
+            println("❌ [Checkout] Failed to fetch location: ${e.message}")
+        }
     }
 
     // MARK: - Place Order — calls POST /orders (matches iOS handlePlaceOrder)
@@ -376,7 +432,8 @@ fun CheckoutScreen(
                             selectedAddress = selectedAddress!!,
                             onAddressTap = { showSelectAddress = true },
                             leaveAtDoor = leaveAtDoor,
-                            onLeaveAtDoorChanged = { leaveAtDoor = it }
+                            onLeaveAtDoorChanged = { leaveAtDoor = it },
+                            isUserFarFromAddress = isUserFarFromAddress
                         )
                     } else {
                         Column(
@@ -424,7 +481,9 @@ fun CheckoutScreen(
                                     id = address.id,
                                     title = if (address.isDefault) "Home" else address.street,
                                     fullAddress = "${address.street}, ${address.cityStateZip}",
-                                    instructions = address.gateCode ?: ""
+                                    instructions = address.gateCode ?: "",
+                                    latitude = address.latitude,
+                                    longitude = address.longitude
                                 )
                                 showSelectAddress = false
                             },
@@ -521,6 +580,11 @@ fun CheckoutScreen(
                                 RoundedCornerShape(10.dp)
                             )
                             .clickable(enabled = !isPlacingOrder && !showOrderSuccess) {
+                                val check = context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                                if (check != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                    showLocationDialog = true
+                                    return@clickable
+                                }
                                 scope.launch {
                                     handlePlaceOrder()
                                 }
@@ -534,6 +598,31 @@ fun CheckoutScreen(
                 if (showOrderSuccess) {
                     OrderSuccessOverlay()
                 }
+
+                // Location permission dialog
+                if (showLocationDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showLocationDialog = false },
+                        title = { Text("Location Access Required") },
+                        text = { Text("Please provide access to your current location in Settings to ensure accurate delivery routing.") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                showLocationDialog = false
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = android.net.Uri.fromParts("package", context.packageName, null)
+                                }
+                                context.startActivity(intent)
+                            }) {
+                                Text("Settings")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showLocationDialog = false }) {
+                                Text("Cancel")
+                            }
+                        }
+                    )
+                }
             }
         }
     }
@@ -546,7 +635,8 @@ private fun DeliveryAddressSection(
     selectedAddress: DeliveryAddress,
     onAddressTap: () -> Unit,
     leaveAtDoor: Boolean,
-    onLeaveAtDoorChanged: (Boolean) -> Unit
+    onLeaveAtDoorChanged: (Boolean) -> Unit,
+    isUserFarFromAddress: Boolean = false
 ) {
     Column(
         modifier = Modifier
@@ -559,6 +649,46 @@ private fun DeliveryAddressSection(
             fontWeight = FontWeight.Bold,
             color = Color.Black
         )
+
+        if (selectedAddress.latitude != 0.0 && selectedAddress.longitude != 0.0) {
+            Spacer(modifier = Modifier.height(8.dp))
+            val mapHeight = LocalConfiguration.current.screenHeightDp.dp * 0.09f
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(mapHeight)
+                    .clip(RoundedCornerShape(12.dp))
+            ) {
+                AndroidView(
+                    factory = { factoryContext ->
+                        MapView(factoryContext, MapInitOptions(factoryContext)).also { mapView ->
+                            val mapboxMap = mapView.mapboxMap
+                            val deliveryPoint = Point.fromLngLat(selectedAddress.longitude, selectedAddress.latitude)
+                            mapboxMap.setCamera(
+                                CameraOptions.Builder()
+                                    .center(deliveryPoint)
+                                    .zoom(14.0)
+                                    .build()
+                            )
+                            mapboxMap.loadStyle("mapbox://styles/mapbox/streets-v12") { style ->
+                                val annotationPlugin = mapView.annotations
+                                val pointAnnotationManager = annotationPlugin.createPointAnnotationManager()
+                                val annotationOptions = PointAnnotationOptions()
+                                    .withPoint(deliveryPoint)
+                                pointAnnotationManager.create(annotationOptions)
+                            }
+                            mapView.gestures.updateSettings {
+                                scrollEnabled = false
+                                pinchToZoomEnabled = false
+                                rotateEnabled = false
+                                pitchEnabled = false
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -611,6 +741,24 @@ private fun DeliveryAddressSection(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFF007AFF) // iOS system blue
+                )
+            }
+        }
+
+        if (isUserFarFromAddress) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.Yellow.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "You seem far away from this address. Please double-check your delivery location before ordering!",
+                    fontSize = 13.sp,
+                    color = Color.Black
                 )
             }
         }
