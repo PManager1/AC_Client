@@ -73,7 +73,6 @@ import java.net.URL
 import java.util.Locale
 
 // MARK: - Order Detail Screen — Matches iOS OrderDetail.swift
-@Suppress("DEPRECATION")
 @Composable
 fun OrderDetailScreen(
     onBack: () -> Unit
@@ -118,13 +117,13 @@ fun OrderDetailScreen(
         try {
             val geocoder = Geocoder(context, Locale.getDefault())
 
-            val restResults = geocoder.getFromLocationName(restaurantAddress, 1)
+            val restResults = geocoder.getFromLocationName(restaurantAddress, 1, -90.0, -180.0, 90.0, 180.0)
             if (!restResults.isNullOrEmpty()) {
                 restaurantPoint = Point.fromLngLat(restResults[0].longitude, restResults[0].latitude)
                 Log.d("OrderDetail", "📍 Restaurant: ${restResults[0].latitude}, ${restResults[0].longitude}")
             }
 
-            val delResults = geocoder.getFromLocationName(deliveryAddress, 1)
+            val delResults = geocoder.getFromLocationName(deliveryAddress, 1, -90.0, -180.0, 90.0, 180.0)
             if (!delResults.isNullOrEmpty()) {
                 deliveryPoint = Point.fromLngLat(delResults[0].longitude, delResults[0].latitude)
                 Log.d("OrderDetail", "📍 Delivery: ${delResults[0].latitude}, ${delResults[0].longitude}")
@@ -215,8 +214,7 @@ fun OrderDetailScreen(
         val ptMgr = pointAnnotationManager ?: return@LaunchedEffect
         val lineMgr = polylineAnnotationManager ?: return@LaunchedEffect
 
-        @Suppress("DEPRECATION")
-        val mapboxMap = mapView.getMapboxMap()
+        val mapboxMap = mapView.mapboxMap
 
         // Clear previous annotations
         ptMgr.deleteAll()
@@ -376,10 +374,8 @@ fun OrderDetailScreen(
             ) {
                 AndroidView(
                     factory = { factoryContext ->
-                        MapView(factoryContext, MapInitOptions(
-                            context = factoryContext
-                        )).also { mapView ->
-                            val mapboxMap = mapView.getMapboxMap()
+                        MapView(factoryContext, MapInitOptions(factoryContext)).also { mapView ->
+                            val mapboxMap = mapView.mapboxMap
                             mapboxMap.setCamera(
                                 CameraOptions.Builder()
                                     .center(Point.fromLngLat(-77.0369, 38.9072))

@@ -51,9 +51,10 @@ android {
     }
 
     defaultConfig {
-        // Inject Mapbox token into BuildConfig and AndroidManifest
+        // Inject Mapbox token into BuildConfig (used by Config.kt and Directions API)
         buildConfigField("String", "MAPBOX_ACCESS_TOKEN", "\"$mapboxToken\"")
-        manifestPlaceholders["MAPBOX_ACCESS_TOKEN"] = mapboxToken
+        // Inject Mapbox access token as string resource (SDK reads @string/mapbox_access_token)
+        resValue("string", "mapbox_access_token", mapboxToken)
 
         // Inject Google Maps API key into BuildConfig and AndroidManifest (same pattern)
         buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$googleMapsKey\"")

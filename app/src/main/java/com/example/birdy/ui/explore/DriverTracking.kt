@@ -242,10 +242,8 @@ fun DriverTrackingScreen(
         // Full-screen Mapbox Map (same as iOS DriverPositionMapView)
         AndroidView(
             factory = { factoryContext ->
-                MapView(factoryContext, MapInitOptions(
-                    context = factoryContext
-                )).also { mapView ->
-                    val mapboxMap = mapView.getMapboxMap()
+                MapView(factoryContext, MapInitOptions(factoryContext)).also { mapView ->
+                    val mapboxMap = mapView.mapboxMap
 
                     // Camera: center on DC area initially (matches iOS)
                     mapboxMap.setCamera(
@@ -466,7 +464,7 @@ private fun handleRouteAndCamera(
     onCentered: () -> Unit,
     lineMgr: PolylineAnnotationManager?
 ) {
-    val mapboxMap = mapView.getMapboxMap()
+    val mapboxMap = mapView.mapboxMap
 
     if (userLoc != null) {
         // Fetch route and draw line
@@ -619,9 +617,7 @@ private fun fitCameraToShowBoth(
 
     val camera = mapboxMap.cameraForCoordinateBounds(
         bounds,
-        EdgeInsets(100.0, 60.0, 100.0, 60.0),  // top, left, bottom, right padding
-        0.0,  // bearing
-        0.0   // pitch
+        EdgeInsets(100.0, 60.0, 100.0, 60.0)  // top, left, bottom, right padding
     )
     mapboxMap.setCamera(camera)
 

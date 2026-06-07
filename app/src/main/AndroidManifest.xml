@@ -23,11 +23,6 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="${GOOGLE_MAPS_API_KEY}" />
 
-        <!-- Mapbox Access Token (injected from local.properties via manifestPlaceholder) -->
-        <meta-data
-            android:name="com.mapbox.AccessToken"
-            android:value="${MAPBOX_ACCESS_TOKEN}" />
-
         <!-- Firebase Cloud Messaging Service -->
         <service
             android:name=".push.MyFirebaseMessagingService"

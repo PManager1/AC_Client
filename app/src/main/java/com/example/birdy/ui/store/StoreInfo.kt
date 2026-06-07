@@ -23,7 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import android.content.Intent
-import androidx.compose.material.icons.filled.DirectionsBike
+import androidx.compose.material.icons.automirrored.filled.DirectionsBike
 import androidx.core.net.toUri
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.LocationOn
@@ -143,7 +143,7 @@ fun StoreInfo(
             if (mapLat == 0.0 || mapLng == 0.0) {
                 try {
                     val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
-                    val results = geocoder.getFromLocationName(data.location_info.address, 1)
+                    val results = geocoder.getFromLocationName(data.location_info.address, 1, -90.0, -180.0, 90.0, 180.0)
                     if (!results.isNullOrEmpty()) {
                         mapLat = results[0].latitude
                         mapLng = results[0].longitude
@@ -171,10 +171,8 @@ fun StoreInfo(
             ) {
                 AndroidView(
                     factory = { factoryContext ->
-                        MapView(factoryContext, MapInitOptions(
-                            context = factoryContext
-                        )).also { mapView ->
-                            val mapboxMap = mapView.getMapboxMap()
+                        MapView(factoryContext, MapInitOptions(factoryContext)).also { mapView ->
+                            val mapboxMap = mapView.mapboxMap
                             mapboxMap.setCamera(
                                 CameraOptions.Builder()
                                     .center(restaurantPoint)
@@ -494,7 +492,7 @@ fun StoreInfo(
             ModernInfoCard(
                 title = deliveryCardTitle,
                 subtitle = deliveryCardSubtitle,
-                icon = Icons.Default.DirectionsBike,
+                icon = Icons.AutoMirrored.Filled.DirectionsBike,
                 color = if (deliveryEnabled == false) Color.Gray else BurntOrange,
                 modifier = Modifier.weight(1f)
             )
