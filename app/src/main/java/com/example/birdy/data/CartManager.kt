@@ -58,12 +58,14 @@ object CartManager {
         get() = items.sumOf { it.quantity }
 
     fun addItem(item: CartItem) {
-        val existing = items.find {
+        val index = items.indexOfFirst {
             it.dishName == item.dishName && it.selectedOptions == item.selectedOptions
         }
-        if (existing != null) {
-            existing.quantity += item.quantity
-            items = items.toMutableList() // trigger recomposition
+        if (index >= 0) {
+            val existing = items[index]
+            items = items.toMutableList().apply {
+                set(index, existing.copy(quantity = existing.quantity + item.quantity))
+            }
         } else {
             items = (items + item).toMutableList()
         }
@@ -79,8 +81,9 @@ object CartManager {
             if (quantity <= 0) {
                 items = items.filter { it.id != item.id }.toMutableList()
             } else {
-                items[index].quantity = quantity
-                items = items.toMutableList() // trigger recomposition
+                items = items.toMutableList().apply {
+                    set(index, items[index].copy(quantity = quantity))
+                }
             }
         }
     }
@@ -90,10 +93,21 @@ object CartManager {
         if (index >= 0) {
             val item = items[index]
             if (item.quantity > 1) {
-                item.quantity -= 1
-                items = items.toMutableList() // trigger recomposition
+                items = items.toMutableList().apply {
+                    set(index, item.copy(quantity = item.quantity - 1))
+                }
             } else {
                 items = items.toMutableList().also { it.removeAt(index) }
+            }
+        }
+    }
+
+    fun incrementItem(dishName: String) {
+        val index = items.indexOfFirst { it.dishName == dishName }
+        if (index >= 0) {
+            val current = items[index]
+            items = items.toMutableList().apply {
+                set(index, current.copy(quantity = current.quantity + 1))
             }
         }
     }

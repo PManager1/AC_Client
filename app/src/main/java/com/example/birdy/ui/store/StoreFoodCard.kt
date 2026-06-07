@@ -108,7 +108,16 @@ fun StoreFoodCard(
                             .padding(8.dp)
                             .shadow(2.dp, CircleShape)
                             .background(Color.White, CircleShape)
-                            .clickable { onItemTap() }
+                            .clickable {
+                                CartManager.addItem(
+                                    CartItem(
+                                        dishName = menuItem.name,
+                                        restaurantName = restaurantName,
+                                        price = menuItem.price,
+                                        imageURL = menuItem.image_url
+                                    )
+                                )
+                            }
                             .padding(8.dp)
                     ) {
                         Icon(
@@ -150,7 +159,7 @@ fun StoreFoodCard(
                             modifier = Modifier
                                 .size(26.dp)
                                 .background(Color(0xFFCC5500), CircleShape)
-                                .clickable { onItemTap() },
+                                .clickable { CartManager.incrementItem(menuItem.name) },
                             contentAlignment = Alignment.Center
                         ) {
                             Text("+", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -211,16 +220,7 @@ fun StoreFoodCard(
                             modifier = Modifier
                                 .size(26.dp)
                                 .background(Color(0xFFCC5500), CircleShape)
-                                .clickable {
-                                    CartManager.addItem(
-                                        CartItem(
-                                            dishName = menuItem.name,
-                                            restaurantName = restaurantName,
-                                            price = menuItem.price,
-                                            imageURL = menuItem.image_url
-                                        )
-                                    )
-                                },
+                                .clickable { CartManager.incrementItem(menuItem.name) },
                             contentAlignment = Alignment.Center
                         ) {
                             Text("+", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
