@@ -162,7 +162,6 @@ fun HomeFDScreen(
                         color = Color.Black
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
             }
 
             // MARK: - Grocery Stores (when Grocery tab selected)

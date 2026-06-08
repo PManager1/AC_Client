@@ -357,7 +357,8 @@ fun GroceryStoreList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = modifier
             .padding(horizontal = 16.dp)
-            .heightIn(max = 600.dp),
+            .padding(bottom = 90.dp)
+            .heightIn(max = 800.dp),
         userScrollEnabled = false
     ) {
         items(stores) { store ->
