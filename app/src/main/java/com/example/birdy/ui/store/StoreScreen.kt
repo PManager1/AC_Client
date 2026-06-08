@@ -380,12 +380,12 @@ fun StoreScreen(
                     .height(240.dp)
             ) {
                 if (data.brand_info.banner_image_url.isEmpty()) {
-                    // Grey placeholder when no banner (matches iOS)
+                    // Neutral background when no banner
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(240.dp)
-                            .background(Color.Gray.copy(alpha = 0.15f))
+                            .background(Color(0xFFE0E0E0))
                     )
                 } else {
                     SubcomposeAsyncImage(
@@ -450,38 +450,54 @@ fun StoreScreen(
             ) {
                 // Logo overlapping banner
                 Box(modifier = Modifier.offset(y = (-40).dp)) {
-                    SubcomposeAsyncImage(
-                        model = data.brand_info.logo_url,
-                        contentDescription = "Logo",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(84.dp)
-                            .clip(CircleShape)
-                            .background(Color.White)
-                            .shadow(8.dp, CircleShape),
-                        loading = {
-                            Box(
-                                modifier = Modifier
-                                    .size(84.dp)
-                                    .background(Color.Gray.copy(alpha = 0.1f), CircleShape)
+                    if (data.brand_info.logo_url.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .size(84.dp)
+                                .background(Color.Gray.copy(alpha = 0.1f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = data.brand_info.name.take(1).uppercase(),
+                                fontSize = 28.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Gray
                             )
-                        },
-                        error = {
-                            Box(
-                                modifier = Modifier
-                                    .size(84.dp)
-                                    .background(Color.Gray.copy(alpha = 0.15f), CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = data.brand_info.name.take(1).uppercase(),
-                                    fontSize = 28.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Gray
-                                )
-                            }
                         }
-                    )
+                    } else {
+                        SubcomposeAsyncImage(
+                            model = data.brand_info.logo_url,
+                            contentDescription = "Logo",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(84.dp)
+                                .clip(CircleShape)
+                                .background(Color.White)
+                                .shadow(8.dp, CircleShape),
+                            loading = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(84.dp)
+                                        .background(Color.Gray.copy(alpha = 0.1f), CircleShape)
+                                )
+                            },
+                            error = {
+                                Box(
+                                    modifier = Modifier
+                                        .size(84.dp)
+                                        .background(Color.Gray.copy(alpha = 0.15f), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = data.brand_info.name.take(1).uppercase(),
+                                        fontSize = 28.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.Gray
+                                    )
+                                }
+                            }
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(-30.dp))
