@@ -437,20 +437,20 @@ private fun ResultsList(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = "No results found",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.Gray
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                modifier = Modifier.size(40.dp),
+                tint = Color.Gray.copy(alpha = 0.4f)
             )
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "Try a different search term",
-                fontSize = 14.sp,
+                text = "Searching...",
+                fontSize = 16.sp,
                 color = Color.Gray
             )
         }
