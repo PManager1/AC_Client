@@ -8,3 +8,14 @@
 .externalNativeBuild
 .cxx
 
+
+.idea/caches/ 
+.idea/gradle.xml
+
+
+# Local configuration file (SDK paths, etc.)
+app/local.properties
+
+# IDE specific files
+app/.idea/
+.idea/
