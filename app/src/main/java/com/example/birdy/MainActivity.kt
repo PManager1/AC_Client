@@ -39,6 +39,7 @@ import com.example.birdy.data.ExploreCategory
 import com.example.birdy.ui.explore.ExploreScreen
 import com.example.birdy.ui.explore.NewFoodPlacesScreen
 import com.example.birdy.ui.explore.SearchFoodScreen
+import com.example.birdy.ui.explore.SeaMoreScreen
 import com.example.birdy.ui.store.StoreScreen
 import com.example.birdy.ui.explore.CartScreen
 import com.example.birdy.ui.explore.CheckoutScreen
@@ -131,6 +132,7 @@ fun BirdyAppContent() {
     var selectedCategory by remember { mutableStateOf<ExploreCategory?>(null) }
     var showPizzaHome by remember { mutableStateOf(false) }
     var showFastFoodHome by remember { mutableStateOf(false) }
+    var showSeaMore by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     // Force update check
@@ -166,6 +168,7 @@ fun BirdyAppContent() {
                         selectedCategory = null
                         showPizzaHome = false
                         showFastFoodHome = false
+                        showSeaMore = false
                         selectedStoreName = ""
                         selectedIsGrocery = false
                     }
@@ -181,6 +184,21 @@ fun BirdyAppContent() {
                 when (selectedTab) {
                     TAB_HOME -> {
                         when {
+                            showSearchFood -> {
+                                SearchFoodScreen(
+                                    onBack = { showSearchFood = false },
+                                    onRestaurantClick = { restaurantId ->
+                                        selectedRestaurantId = restaurantId
+                                        showStore = true
+                                    },
+                                    onBrandClick = { brandId ->
+                                        selectedRestaurantId = brandId
+                                        showSearchFood = false
+                                        showStore = true
+                                    },
+                                    onSeeMore = { showSeaMore = true }
+                                )
+                            }
                             showFastFoodHome -> {
                                 FastFoodHomeScreen(
                                     onBack = { showFastFoodHome = false },
@@ -234,7 +252,7 @@ fun BirdyAppContent() {
                             else -> {
                                 HomeFDScreen(
                                     onNavigateToSearch = {
-                                        // TODO: Navigate to Search screen
+                                        showSearchFood = true
                                     },
                                     onNavigateToCart = {
                                         showCart = true
@@ -293,13 +311,24 @@ fun BirdyAppContent() {
                                     jsonInputStream = if (selectedRestaurantId.isEmpty()) context.assets.open("storejson.json") else null
                                 )
                             }
+                            showSeaMore -> {
+                                SeaMoreScreen(
+                                    onBack = { showSeaMore = false }
+                                )
+                            }
                             showSearchFood -> {
                                 SearchFoodScreen(
                                     onBack = { showSearchFood = false },
                                     onRestaurantClick = { restaurantId ->
                                         selectedRestaurantId = restaurantId
                                         showStore = true
-                                    }
+                                    },
+                                    onBrandClick = { brandId ->
+                                        selectedRestaurantId = brandId
+                                        showSearchFood = false
+                                        showStore = true
+                                    },
+                                    onSeeMore = { showSeaMore = true }
                                 )
                             }
                             showFoodPlaces && selectedCategory != null -> {

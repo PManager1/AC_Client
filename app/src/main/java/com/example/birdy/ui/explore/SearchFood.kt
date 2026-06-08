@@ -15,11 +15,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.HorizontalDivider
@@ -29,9 +31,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,10 +45,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.birdy.data.AuthManager
+import com.example.birdy.data.Config
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 
 // Matches iOS SearchFood.swift
 
@@ -56,6 +72,18 @@ private data class SearchRestaurant(
     val rating: Double,
     val distance: String,
     val deliveryTime: String
+)
+
+private data class BrandSuggestion(
+    val id: String,
+    val name: String,
+    val logoUrl: String,
+    val tags: List<String>
+)
+
+data class RecentSearchEntry(
+    val query: String,
+    val count: Int
 )
 
 private val mockRestaurants = listOf(
@@ -111,20 +139,39 @@ private val mockRestaurants = listOf(
     )
 )
 
-private val recentSearches = listOf("Popeyes Louisiana Kitchen", "Fast Food", "Chinese", "Argentine")
 private val suggestedSearches = listOf("Chicken nuggets", "Candy", "Blueberry muffin")
 
 @Composable
 fun SearchFoodScreen(
     onBack: () -> Unit = {},
-    onRestaurantClick: (String) -> Unit = {}
+    onRestaurantClick: (String) -> Unit = {},
+    onBrandClick: (String) -> Unit = {},
+    onSeeMore: () -> Unit = {}
 ) {
+    val scope = rememberCoroutineScope()
     var searchText by remember { mutableStateOf("") }
+    var brandSuggestions by remember { mutableStateOf<List<BrandSuggestion>>(emptyList()) }
+    val recentSearches = remember { mutableStateListOf<RecentSearchEntry>() }
+
     val results = remember(searchText) {
         if (searchText.isEmpty()) {
             emptyList()
         } else {
             mockRestaurants.filter { it.name.lowercase().contains(searchText.lowercase()) }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val loaded = loadRecentSearches()
+        recentSearches.clear()
+        recentSearches.addAll(loaded)
+    }
+
+    LaunchedEffect(searchText) {
+        if (searchText.length >= 2) {
+            brandSuggestions = fetchBrandSuggestions(searchText)
+        } else {
+            brandSuggestions = emptyList()
         }
     }
 
@@ -157,7 +204,18 @@ fun SearchFoodScreen(
                 },
                 singleLine = true,
                 textStyle = TextStyle(fontSize = 17.sp, color = Color.Black),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Search
+                ),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        val trimmed = searchText.trim()
+                        if (trimmed.isNotEmpty()) {
+                            scope.launch { saveSearchQuery(trimmed) }
+                        }
+                    }
+                ),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -187,20 +245,102 @@ fun SearchFoodScreen(
         // MARK: - Content
         if (searchText.isEmpty()) {
             EmptyStateView(
-                onSearchClick = { searchText = it }
+                recentSearches = recentSearches,
+                onSearchClick = { searchText = it },
+                onSeeMore = onSeeMore
             )
         } else {
             ResultsList(
+                brandSuggestions = brandSuggestions,
                 results = results,
+                onBrandClick = { brand ->
+                    scope.launch { saveSearchQuery(brand.name) }
+                    onBrandClick(brand.id)
+                },
                 onResultClick = { restaurant -> onRestaurantClick(restaurant.id.toString()) }
             )
         }
     }
 }
 
+private suspend fun loadRecentSearches(): List<RecentSearchEntry> = withContext(Dispatchers.IO) {
+    try {
+        val url = URL("${Config.API_BASE_URL}/users/search-food-history")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.setRequestProperty("Content-Type", "application/json")
+        AuthManager.getToken()?.let {
+            conn.setRequestProperty("Authorization", "Bearer $it")
+        }
+        val json = conn.inputStream.bufferedReader().readText()
+        val obj = JSONObject(json)
+        val arr = obj.getJSONArray("searches")
+        (0 until arr.length()).map { i ->
+            val item = arr.getJSONObject(i)
+            RecentSearchEntry(
+                query = item.getString("query"),
+                count = item.optInt("count", 0)
+            )
+        }
+    } catch (e: Exception) {
+        android.util.Log.e("SearchFood", "Failed to load recent searches", e)
+        emptyList()
+    }
+}
+
+private suspend fun saveSearchQuery(query: String) = withContext(Dispatchers.IO) {
+    try {
+        val url = URL("${Config.API_BASE_URL}/users/search-food-history")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json")
+        AuthManager.getToken()?.let {
+            conn.setRequestProperty("Authorization", "Bearer $it")
+        }
+        conn.doOutput = true
+        val body = JSONObject().apply { put("query", query) }
+        conn.outputStream.write(body.toString().toByteArray())
+        conn.responseCode
+    } catch (e: Exception) {
+        android.util.Log.e("SearchFood", "Failed to save search query", e)
+    }
+}
+
+private suspend fun fetchBrandSuggestions(query: String): List<BrandSuggestion> = withContext(Dispatchers.IO) {
+    try {
+        val encoded = URLEncoder.encode(query, "UTF-8")
+        val url = URL("${Config.API_BASE_URL}/brands/search-by-tag?q=$encoded")
+        val conn = url.openConnection() as HttpURLConnection
+        val json = conn.inputStream.bufferedReader().readText()
+        val obj = JSONObject(json)
+        val arr = obj.getJSONArray("brands")
+        (0 until arr.length()).map { i ->
+            val item = arr.getJSONObject(i)
+            val tags = mutableListOf<String>()
+            val tagsArr = item.optJSONArray("tags")
+            if (tagsArr != null) {
+                for (j in 0 until tagsArr.length()) {
+                    tags.add(tagsArr.getString(j))
+                }
+            }
+            BrandSuggestion(
+                id = item.getString("id"),
+                name = item.getString("name"),
+                logoUrl = item.optString("logoUrl", ""),
+                tags = tags
+            )
+        }
+    } catch (e: Exception) {
+        android.util.Log.e("SearchFood", "Failed to fetch brand suggestions", e)
+        emptyList()
+    }
+}
+
 @Composable
 private fun EmptyStateView(
-    onSearchClick: (String) -> Unit = {}
+    recentSearches: List<RecentSearchEntry>,
+    onSearchClick: (String) -> Unit = {},
+    onSeeMore: () -> Unit = {}
 ) {
     LazyColumn(
         modifier = Modifier
@@ -225,14 +365,15 @@ private fun EmptyStateView(
                         text = "See More",
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Black
+                        color = Color.Black,
+                        modifier = Modifier.clickable { onSeeMore() }
                     )
                 }
-                recentSearches.forEach { item ->
+                recentSearches.forEach { entry ->
                     SearchRow(
                         icon = Icons.Default.AccessTime,
-                        text = item,
-                        onClick = { onSearchClick(item) }
+                        text = entry.query,
+                        onClick = { onSearchClick(entry.query) }
                     )
                 }
             }
@@ -287,10 +428,12 @@ private fun SearchRow(
 
 @Composable
 private fun ResultsList(
+    brandSuggestions: List<BrandSuggestion> = emptyList(),
     results: List<SearchRestaurant>,
+    onBrandClick: (BrandSuggestion) -> Unit = {},
     onResultClick: (SearchRestaurant) -> Unit = {}
 ) {
-    if (results.isEmpty()) {
+    if (brandSuggestions.isEmpty() && results.isEmpty()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -313,6 +456,13 @@ private fun ResultsList(
         }
     } else {
         LazyColumn(modifier = Modifier.fillMaxSize()) {
+            items(brandSuggestions) { brand ->
+                BrandSearchResultRow(
+                    brand = brand,
+                    onClick = { onBrandClick(brand) }
+                )
+                HorizontalDivider(modifier = Modifier.padding(start = 85.dp))
+            }
             items(results) { item ->
                 SearchResultRow(
                     restaurant = item,
@@ -321,6 +471,52 @@ private fun ResultsList(
                 HorizontalDivider(modifier = Modifier.padding(start = 85.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun BrandSearchResultRow(
+    brand: BrandSuggestion,
+    onClick: () -> Unit = {}
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        AsyncImage(
+            model = brand.logoUrl,
+            contentDescription = brand.name,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(70.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFFF2F2F7))
+        )
+
+        Spacer(modifier = Modifier.width(15.dp))
+
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = brand.name,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+            Text(
+                text = brand.tags.take(3).joinToString(" • "),
+                fontSize = 13.sp,
+                color = Color.Gray
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = Color.Gray.copy(alpha = 0.5f)
+        )
     }
 }
 
@@ -336,7 +532,6 @@ private fun SearchResultRow(
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // Restaurant image
         AsyncImage(
             model = restaurant.imageUrl,
             contentDescription = restaurant.name,
@@ -349,7 +544,6 @@ private fun SearchResultRow(
 
         Spacer(modifier = Modifier.width(15.dp))
 
-        // Restaurant info
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = restaurant.name,
