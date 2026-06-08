@@ -486,17 +486,17 @@ private fun BrandSearchResultRow(
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        AsyncImage(
-            model = brand.logoUrl,
-            contentDescription = brand.name,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .size(70.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFFF2F2F7))
-        )
-
-        Spacer(modifier = Modifier.width(15.dp))
+        if (brand.logoUrl.isNotEmpty()) {
+            AsyncImage(
+                model = brand.logoUrl,
+                contentDescription = brand.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(70.dp)
+                    .clip(RoundedCornerShape(12.dp))
+            )
+            Spacer(modifier = Modifier.width(15.dp))
+        }
 
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(

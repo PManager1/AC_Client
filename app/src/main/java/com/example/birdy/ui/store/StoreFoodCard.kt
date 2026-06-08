@@ -59,14 +59,15 @@ fun StoreFoodCard(
         }
         Log.d("StoreFoodCard", "🖼️ [${menuItem.name}] image type=$type, preview=${imgUrl.take(80)}")
     } else {
-        Log.w("StoreFoodCard", "⚠️ [${menuItem.name}] NO image URL — card will show fallback")
+        Log.w("StoreFoodCard", "⚠️ [${menuItem.name}] NO image URL — hiding image box")
     }
 
     Column(
         modifier = Modifier.width(cardWidth),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Image with add/stepper button
+        // Image with add/stepper button — only show if image_url is not empty
+        if (menuItem.image_url.isNotEmpty()) {
         Box(
             modifier = Modifier
                 .size(172.dp, 170.dp)
@@ -91,11 +92,8 @@ fun StoreFoodCard(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color(0xFFE8E8E8)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("🍕", fontSize = 32.sp)
-                    }
+                            .background(Color(0xFFE8E8E8))
+                    )
                 }
             )
 
@@ -228,6 +226,7 @@ fun StoreFoodCard(
                     }
                 }
             }
+        }
         }
 
         // Name
