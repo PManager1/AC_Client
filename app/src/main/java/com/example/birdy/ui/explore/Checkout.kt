@@ -142,7 +142,7 @@ fun CheckoutScreen(
 
     val totalWithTip = CartManager.total + tipAmount
 
-    val displayCompetitorEstimate = competitorEstimate ?: (CartManager.subtotal * 1.15 * 1.10 + 4.99)
+    val displayCompetitorEstimate = competitorEstimate ?: 0.0
 
     val isUserFarFromAddress by remember(selectedAddress, userLat, userLng, hasUserLocation) {
         derivedStateOf {
@@ -600,7 +600,7 @@ fun CheckoutScreen(
                     CompetitorSection(
                         competitorEstimate = displayCompetitorEstimate,
                         isLoading = isLoadingCompetitorEstimate,
-                        totalWithTip = totalWithTip,
+                        cartTotal = CartManager.total,
                         onShowDetails = { showCompetitorDetails = true }
                     )
 
@@ -1124,7 +1124,7 @@ private fun SummarySection(
 private fun CompetitorSection(
     competitorEstimate: Double,
     isLoading: Boolean,
-    totalWithTip: Double,
+    cartTotal: Double,
     onShowDetails: () -> Unit
 ) {
     Column(
@@ -1158,7 +1158,7 @@ private fun CompetitorSection(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 CheckoutPriceRow(title = "Competitor Estimate", amount = competitorEstimate)
 
-                val savings = competitorEstimate - totalWithTip
+                val savings = competitorEstimate - cartTotal
                 Text(
                     text = "You saved $${String.format("%.2f", savings)} by using U-DO!",
                     fontSize = 16.sp,
@@ -1191,7 +1191,7 @@ private fun CompetitorSection(
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-            text = "*Estimates are calculated based on standard corporate platform markups (15% average item inflation + 10% service fee). Actual competitor checkout prices may vary based on location and promotion status.",
+            text = "*Estimates are calculated based on standard corporate platform markups (15% average item inflation + 10% service fee + 8% tax). Actual competitor checkout prices may vary based on location and promotion status.",
             fontSize = 12.sp,
             color = Color.Gray,
             textAlign = TextAlign.Center

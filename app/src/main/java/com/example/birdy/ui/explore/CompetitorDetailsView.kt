@@ -38,6 +38,7 @@ fun CompetitorDetailsView(
     val markedUpSubtotal = subtotal * 1.15
     val serviceFee = markedUpSubtotal * 0.10
     val deliveryFee = 4.99
+    val tax = (markedUpSubtotal + serviceFee + deliveryFee) * 0.08
 
     Column(
         modifier = Modifier
@@ -96,6 +97,7 @@ fun CompetitorDetailsView(
                 CheckoutPriceRow(title = "Hidden markup (15%)", amount = markedUpSubtotal - subtotal)
                 CheckoutPriceRow(title = "Service fee (10%)", amount = serviceFee)
                 CheckoutPriceRow(title = "Delivery fee", amount = deliveryFee)
+                CheckoutPriceRow(title = "Tax (8%)", amount = tax)
 
                 HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f))
 
