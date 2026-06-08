@@ -136,8 +136,13 @@ fun CheckoutScreen(
     var userLng by remember { mutableStateOf(0.0) }
     var hasUserLocation by remember { mutableStateOf(false) }
     var showLocationDialog by remember { mutableStateOf(false) }
+    var competitorEstimate by remember { mutableStateOf<Double?>(null) }
+    var isLoadingCompetitorEstimate by remember { mutableStateOf(true) }
+    var showCompetitorDetails by remember { mutableStateOf(false) }
 
     val totalWithTip = CartManager.total + tipAmount
+
+    val displayCompetitorEstimate = competitorEstimate ?: (CartManager.subtotal * 1.15 * 1.10 + 4.99)
 
     val isUserFarFromAddress by remember(selectedAddress, userLat, userLng, hasUserLocation) {
         derivedStateOf {
@@ -202,6 +207,36 @@ fun CheckoutScreen(
         } catch (e: Exception) {
             println("❌ [Checkout] Failed to fetch location: ${e.message}")
         }
+    }
+
+    // MARK: - Fetch Competitor Estimate from Backend
+    LaunchedEffect(Unit) {
+        val token = AuthManager.getToken(context)
+        if (!token.isNullOrEmpty()) {
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    val url = URL("${Config.API_BASE_URL}/orders/competitor-estimate?subtotal=${CartManager.subtotal}")
+                    val connection = url.openConnection() as HttpURLConnection
+                    connection.requestMethod = "GET"
+                    connection.setRequestProperty("Authorization", "Bearer $token")
+                    connection.connectTimeout = 5000
+                    connection.readTimeout = 5000
+
+                    val responseCode = connection.responseCode
+                    if (responseCode == 200) {
+                        val body = connection.inputStream.bufferedReader().readText()
+                        val json = JSONObject(body)
+                        json.optDouble("competitorEstimate", -1.0)
+                    } else -1.0
+                }
+                if (result > 0) {
+                    competitorEstimate = result
+                }
+            } catch (e: Exception) {
+                println("⚠️ [Checkout] Failed to fetch competitor estimate: ${e.message}")
+            }
+        }
+        isLoadingCompetitorEstimate = false
     }
 
     // MARK: - Place Order — calls POST /orders (matches iOS handlePlaceOrder)
@@ -519,6 +554,24 @@ fun CheckoutScreen(
                         }
                     }
 
+                    // Competitor details bottom sheet
+                    if (showCompetitorDetails) {
+                        val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+                            skipPartiallyExpanded = true
+                        )
+                        androidx.compose.material3.ModalBottomSheet(
+                            onDismissRequest = { showCompetitorDetails = false },
+                            sheetState = sheetState,
+                            containerColor = Color.White
+                        ) {
+                            CompetitorDetailsView(
+                                subtotal = CartManager.subtotal,
+                                competitorEstimate = displayCompetitorEstimate,
+                                onDismiss = { showCompetitorDetails = false }
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(20.dp))
 
                     // Order Items section
@@ -539,6 +592,16 @@ fun CheckoutScreen(
                         tipAmount = tipAmount,
                         onTipSelected = { tipAmount = it },
                         onShowTipPage = { showTipPage = true }
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Competitor Estimate section
+                    CompetitorSection(
+                        competitorEstimate = displayCompetitorEstimate,
+                        isLoading = isLoadingCompetitorEstimate,
+                        totalWithTip = totalWithTip,
+                        onShowDetails = { showCompetitorDetails = true }
                     )
 
                     Spacer(modifier = Modifier.height(20.dp))
@@ -1055,10 +1118,91 @@ private fun SummarySection(
     }
 }
 
+// MARK: - Competitor Estimate Section (matches iOS competitorSection)
+
+@Composable
+private fun CompetitorSection(
+    competitorEstimate: Double,
+    isLoading: Boolean,
+    totalWithTip: Double,
+    onShowDetails: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .background(Color.White, RoundedCornerShape(16.dp))
+            .padding(16.dp)
+    ) {
+        Text(
+            text = "Competitor Estimate*",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.Black
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (isLoading) {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    color = Color(0xFFCC5500),
+                    modifier = Modifier.size(32.dp),
+                    strokeWidth = 3.dp
+                )
+            }
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CheckoutPriceRow(title = "Competitor Estimate", amount = competitorEstimate)
+
+                val savings = competitorEstimate - totalWithTip
+                Text(
+                    text = "You saved $${String.format("%.2f", savings)} by using U-DO!",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
+
+                Row(
+                    modifier = Modifier
+                        .clickable { onShowDetails() },
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Show me details",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFFCC5500)
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = Color(0xFFCC5500),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "*Estimates are calculated based on standard corporate platform markups (15% average item inflation + 10% service fee). Actual competitor checkout prices may vary based on location and promotion status.",
+            fontSize = 12.sp,
+            color = Color.Gray,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
 // MARK: - Price Row (matches iOS PriceRow_CO)
 
 @Composable
-private fun CheckoutPriceRow(
+fun CheckoutPriceRow(
     title: String,
     amount: Double,
     isBold: Boolean = false
