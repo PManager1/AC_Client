@@ -110,11 +110,10 @@ fun StoreScreen(
         loadError = false
         try {
             if (restaurantId.isNotEmpty()) {
-                // Phase 1: Quick brand fetch (banner + name only) → dismiss skeleton early
+                // Phase 1: Quick brand fetch (banner + name only)
                 val quickData = fetchBrandQuick(restaurantId)
                 if (quickData != null) {
                     storeData = quickData
-                    isLoading = false
                     CartManager.restaurantId = restaurantId
                     CartManager.restaurantName = quickData.brand_info.name
                 }
@@ -1006,7 +1005,7 @@ fun ShimmerBox(modifier: Modifier = Modifier) {
         label = "shimmerSlide"
     )
 
-    val shimmerColor = Color(0xFFF5F5F5)  // Very light gray (systemGray6 equivalent)
+    val shimmerColor = Color(0xFFE8E8E8)
     val shimmerHighlight = Color.White.copy(alpha = 0.7f)
 
     Box(
