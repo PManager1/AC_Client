@@ -124,6 +124,30 @@ fun TipPage(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
+            // ── Support message ──
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFCC5500).copy(alpha = 0.08f), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Support your driver's hard work.",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Our drivers keep the community moving. Thank you for showing your appreciation and generosity.",
+                    fontSize = 13.sp,
+                    color = Color.Gray,
+                    textAlign = TextAlign.Center
+                )
+            }
+
             // ── Custom Tip Input Card ──
             Column(
                 modifier = Modifier.fillMaxWidth()
