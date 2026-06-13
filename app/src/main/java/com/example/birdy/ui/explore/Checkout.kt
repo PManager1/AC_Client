@@ -179,6 +179,7 @@ fun CheckoutScreen(
                     id = defaultAddr.id,
                     title = if (defaultAddr.isDefault) "Home" else defaultAddr.street,
                     fullAddress = "${defaultAddr.street}, ${defaultAddr.cityStateZip}",
+                    
                     instructions = defaultAddr.gateCode ?: "",
                     latitude = defaultAddr.latitude,
                     longitude = defaultAddr.longitude
