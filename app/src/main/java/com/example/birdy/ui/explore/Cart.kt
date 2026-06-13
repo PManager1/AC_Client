@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.birdy.data.CartItem
 import com.example.birdy.data.CartManager
+import com.example.birdy.ui.components.shimmer
 import com.example.birdy.ui.store.ItemDetailSheet
 
 // MARK: - Cart Screen (full page, matches iOS NavigationLink presentation)
@@ -357,15 +358,21 @@ fun CartItemRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Food image
-            AsyncImage(
-                model = item.imageURL,
-                contentDescription = item.dishName,
-                contentScale = ContentScale.Crop,
+            Box(
                 modifier = Modifier
                     .size(80.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color.Gray.copy(alpha = 0.2f))
-            )
+            ) {
+                // Shimmer placeholder behind the image
+                Box(Modifier.matchParentSize().shimmer())
+                // Image loads on top, covering the shimmer
+                AsyncImage(
+                    model = item.imageURL,
+                    contentDescription = item.dishName,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.matchParentSize()
+                )
+            }
 
             // Info column
             Column(
