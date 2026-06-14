@@ -272,7 +272,7 @@ fun BirdyAppContent() {
                                             "Fast Food" -> {
                                                 selectedTag = "fast_food"
                                                 selectedTagTitle = "Fast Food"
-                                                selectedTagFilters = listOf("All", "Restaurant")
+                                                selectedTagFilters = listOf("All", "Nearest", "Top Rated", "\$0 Delivery", "Deals")
                                                 showTagHome = true
                                             }
                                         }

@@ -245,10 +245,9 @@ private suspend fun fetchTagPlaces(
                 val sectionId = section.optString("id", "")
                 val sectionName = section.optString("name", "")
                 val logoUrl = section.optString("logoUrl", "").takeIf { it.isNotEmpty() }
-                val bannerUrl = section.optString("bannerUrl", "").takeIf { it.isNotEmpty() }
 
                 val carouselArray = section.optJSONArray("carouselImages")
-                val sectionCarouselImages = if (carouselArray != null) {
+                val carouselImages = if (carouselArray != null) {
                     (0 until carouselArray.length()).mapNotNull { carouselArray.optString(it).takeIf { it.isNotEmpty() } }
                 } else emptyList()
 
@@ -276,18 +275,14 @@ private suspend fun fetchTagPlaces(
                         val itemPrice = taggedItem.optDouble("price", 0.0)
                         val itemImageUrl = taggedItem.optString("imageUrl", "").takeIf { it.isNotEmpty() }
 
-                        val images = mutableListOf<String>()
-                        if (itemImageUrl != null) images.add(itemImageUrl)
-                        if (images.isEmpty()) images.addAll(sectionCarouselImages)
-                        if (images.isEmpty() && bannerUrl != null) images.add(bannerUrl)
-                        if (images.isEmpty() && logoUrl != null) images.add(logoUrl)
+                        val images = if (itemImageUrl != null) listOf(itemImageUrl) else carouselImages
 
                         items.add(
                             NewFoodRestaurant(
                                 id = sectionId,
                                 restaurantName = itemName,
                                 logoURL = logoUrl,
-                                images = images.ifEmpty { listOf("https://storage.googleapis.com/birdyimages/__App/placeholder-restaurant.jpg") },
+                                images = images,
                                 rating = 4.5,
                                 reviewCount = 100,
                                 distance = nearestDistance,
@@ -301,17 +296,14 @@ private suspend fun fetchTagPlaces(
                         )
                     }
                 } else {
-                    val brandImages = mutableListOf<String>()
-                    brandImages.addAll(sectionCarouselImages)
-                    if (brandImages.isEmpty() && bannerUrl != null) brandImages.add(bannerUrl)
-                    if (brandImages.isEmpty() && logoUrl != null) brandImages.add(logoUrl)
+                    val brandImages = carouselImages
 
                     items.add(
                         NewFoodRestaurant(
                             id = sectionId,
                             restaurantName = sectionName,
                             logoURL = logoUrl,
-                            images = brandImages.ifEmpty { listOf("https://storage.googleapis.com/birdyimages/__App/placeholder-restaurant.jpg") },
+                            images = brandImages,
                             rating = 4.5,
                             reviewCount = 100,
                             distance = nearestDistance,
