@@ -46,8 +46,7 @@ import com.example.birdy.ui.explore.CheckoutScreen
 import com.example.birdy.ui.explore.DriverTrackingScreen
 import com.example.birdy.ui.fooddelivery.HomeFDScreen
 import com.example.birdy.ui.fooddelivery.OrderDetailScreen
-import com.example.birdy.ui.home.FastFoodHomeScreen
-import com.example.birdy.ui.home.PizzaHomeScreen
+import com.example.birdy.ui.home.TagHomeScreen
 import com.example.birdy.ui.inbox.InboxScreen
 import com.example.birdy.ui.inbox.RequestDetailScreen
 import com.example.birdy.ui.theme.BirdyTheme
@@ -130,8 +129,10 @@ fun BirdyAppContent() {
     var showCart by remember { mutableStateOf(false) }
     var showCheckout by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf<ExploreCategory?>(null) }
-    var showPizzaHome by remember { mutableStateOf(false) }
-    var showFastFoodHome by remember { mutableStateOf(false) }
+    var showTagHome by remember { mutableStateOf(false) }
+    var selectedTag by remember { mutableStateOf("") }
+    var selectedTagTitle by remember { mutableStateOf("") }
+    var selectedTagFilters by remember { mutableStateOf(listOf<String>()) }
     var showSeaMore by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
@@ -166,8 +167,7 @@ fun BirdyAppContent() {
                         showFoodPlaces = false
                         showStore = false
                         selectedCategory = null
-                        showPizzaHome = false
-                        showFastFoodHome = false
+                        showTagHome = false
                         showSeaMore = false
                         selectedStoreName = ""
                         selectedIsGrocery = false
@@ -199,24 +199,16 @@ fun BirdyAppContent() {
                                     onSeeMore = { showSeaMore = true }
                                 )
                             }
-                            showFastFoodHome -> {
-                                FastFoodHomeScreen(
-                                    onBack = { showFastFoodHome = false },
+                            showTagHome -> {
+                                TagHomeScreen(
+                                    tag = selectedTag,
+                                    title = selectedTagTitle,
+                                    filters = selectedTagFilters,
+                                    onBack = { showTagHome = false },
                                     onRestaurantClick = { restaurantId ->
                                         selectedRestaurantId = restaurantId
                                         selectedStoreName = ""
-                                        showFastFoodHome = false
-                                        showStore = true
-                                    }
-                                )
-                            }
-                            showPizzaHome -> {
-                                PizzaHomeScreen(
-                                    onBack = { showPizzaHome = false },
-                                    onRestaurantClick = { restaurantId ->
-                                        selectedRestaurantId = restaurantId
-                                        selectedStoreName = ""
-                                        showPizzaHome = false
+                                        showTagHome = false
                                         showStore = true
                                     }
                                 )
@@ -270,10 +262,19 @@ fun BirdyAppContent() {
                                         showStore = true
                                     },
                                     onCategoryClick = { categoryName ->
-                                        if (categoryName == "Pizza") {
-                                            showPizzaHome = true
-                                        } else if (categoryName == "Fast Food") {
-                                            showFastFoodHome = true
+                                        when (categoryName) {
+                                            "Pizza" -> {
+                                                selectedTag = "pizza"
+                                                selectedTagTitle = "Pizza"
+                                                selectedTagFilters = listOf("All", "Restaurant")
+                                                showTagHome = true
+                                            }
+                                            "Fast Food" -> {
+                                                selectedTag = "fast_food"
+                                                selectedTagTitle = "Fast Food"
+                                                selectedTagFilters = listOf("All", "Restaurant")
+                                                showTagHome = true
+                                            }
                                         }
                                     }
                                 )

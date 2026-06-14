@@ -600,7 +600,7 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
             Log.w("StoreApi", "⚠️ /nearest-store failed: ${e.message}")
         }
 
-        // 2. Try chain brand API — fetches brand info + menu from /brands/{id}
+        // 2. Try brand API — fetches brand info + menu from /brands/{id}
         try {
             val brandUrl = "${Config.API_BASE_URL}/brands/$restaurantId"
             val brandConn = java.net.URL(brandUrl).openConnection() as java.net.HttpURLConnection
@@ -726,11 +726,11 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                             }
                         }
 
-                        println("✅ [StoreApi] Loaded chain brand menu: $brandName with ${allItems.size} items in ${menuCategories.size} categories")
+                        println("✅ [StoreApi] Loaded brand menu: $brandName with ${allItems.size} items in ${menuCategories.size} categories")
                     }
                     menuConn.disconnect()
                 } catch (e: Exception) {
-                    println("⚠️ [StoreApi] Chain brand menu fetch failed: ${e.message}")
+                    println("⚠️ [StoreApi] Brand menu fetch failed: ${e.message}")
                 }
 
                 // Try grocery catalog if no menu categories found: /brands/{brandId}/catalog
@@ -783,15 +783,15 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                             for ((catName, items) in itemsByCategory) {
                                 menuCategories.add(StoreMenuCategory(category_name = catName, items = items))
                             }
-                            println("✅ [StoreApi] Loaded chain brand catalog: $brandName with ${menuCategories.size} categories")
+                            println("✅ [StoreApi] Loaded brand catalog: $brandName with ${menuCategories.size} categories")
                         }
                         catalogConn.disconnect()
                     } catch (e: Exception) {
-                        println("⚠️ [StoreApi] Chain brand catalog fetch failed: ${e.message}")
+                        println("⚠️ [StoreApi] Brand catalog fetch failed: ${e.message}")
                     }
                 }
 
-                // Build StoreData from chain brand info
+                // Build StoreData from brand info
                 if (brandName.isNotEmpty()) {
                     return@withContext StoreData(
                         restaurant_id = restaurantId,
@@ -833,7 +833,7 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
             }
             brandConn.disconnect()
         } catch (e: Exception) {
-            println("⚠️ [StoreApi] Chain brand fetch failed: ${e.message}")
+            println("⚠️ [StoreApi] Brand fetch failed: ${e.message}")
         }
 
         // 3. Try restaurant API

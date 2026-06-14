@@ -160,7 +160,7 @@ object HomeFDData {
     // Flat list of all categories (Food only, for backward compatibility)
     val categories = mainCategories.first { it.name == "Food" }.subcategories
 
-    // MARK: - Load Chain Brands (grocery/convenience/pharmacy) from API
+    // MARK: - Load Brands (grocery/convenience/pharmacy) from API
 
     /** Blocking network call — must be called from a background thread */
     fun fetchGroceryStores(): List<GroceryStore> {

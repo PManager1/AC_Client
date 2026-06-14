@@ -1,4 +1,4 @@
-// Matches iOS Home/PizzaHome.swift — fetches real data from /brands/sectioned?tag=pizza
+// Matches iOS Home/TagHome.swift — fetches real data from /brands/sectioned?tag={tag}
 
 package com.example.birdy.ui.home
 
@@ -34,7 +34,7 @@ import java.net.URL
 // MARK: - Filter Chip (matches iOS FilterChip)
 
 @Composable
-fun PizzaFilterChip(
+fun TagFilterChip(
     title: String,
     isSelected: Boolean,
     action: () -> Unit
@@ -55,26 +55,26 @@ fun PizzaFilterChip(
     }
 }
 
-// MARK: - Pizza Home Screen (matches iOS PizzaHome.swift)
+// MARK: - Tag Home Screen (matches iOS TagHome.swift)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PizzaHomeScreen(
+fun TagHomeScreen(
+    tag: String,
+    title: String,
+    filters: List<String>,
     onBack: () -> Unit = {},
     onRestaurantClick: (String) -> Unit = {}
 ) {
     var selectedFilter by remember { mutableStateOf("All") }
-    val filters = listOf("All", "Restaurant")
-
-    var pizzaPlaces by remember { mutableStateOf<List<NewFoodRestaurant>>(emptyList()) }
+    var places by remember { mutableStateOf<List<NewFoodRestaurant>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var retryTrigger by remember { mutableStateOf(0) }
 
-    // Fetch on first appear and on retry or filter change
     LaunchedEffect(retryTrigger, selectedFilter) {
-        fetchPizzaPlaces(selectedFilter) { items, error ->
-            pizzaPlaces = items
+        fetchTagPlaces(tag, selectedFilter) { items, error ->
+            places = items
             errorMessage = error
             isLoading = false
         }
@@ -100,7 +100,7 @@ fun PizzaHomeScreen(
                 )
             }
             Text(
-                text = "Pizza",
+                text = title,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.Black,
@@ -116,7 +116,7 @@ fun PizzaHomeScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             filters.forEach { filter ->
-                PizzaFilterChip(
+                TagFilterChip(
                     title = filter,
                     isSelected = selectedFilter == filter,
                     action = {
@@ -144,7 +144,6 @@ fun PizzaHomeScreen(
                 }
             }
         } else if (errorMessage != null) {
-            // Error state
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -171,8 +170,7 @@ fun PizzaHomeScreen(
                     Text("Try Again", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
-        } else if (pizzaPlaces.isEmpty()) {
-            // Empty state
+        } else if (places.isEmpty()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -185,39 +183,39 @@ fun PizzaHomeScreen(
                 Text("No restaurants found", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
             }
         } else {
-            // Restaurant list
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
                     .padding(top = 8.dp)
             ) {
-                pizzaPlaces.forEach { item ->
+                places.forEach { item ->
                     NewFoodCard(
                         restaurant = item,
                         onClick = { onRestaurantClick(item.id) }
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                 }
-                // Bottom spacing
                 Spacer(modifier = Modifier.height(100.dp))
             }
         }
     }
 }
 
-// MARK: - API Fetch — matches iOS fetchPizzaPlaces()
+// MARK: - API Fetch — matches iOS TagHome.fetchPlaces()
 
-private suspend fun fetchPizzaPlaces(
+private suspend fun fetchTagPlaces(
+    tag: String,
     filter: String,
     onResult: (List<NewFoodRestaurant>, String?) -> Unit
 ) {
     withContext(Dispatchers.IO) {
         try {
-            // Build URL — matches iOS: /brands/sectioned?tag=pizza[&type=restaurant]
-            var urlString = "${Config.API_BASE_URL}/brands/sectioned?tag=pizza"
+            var urlString = "${Config.API_BASE_URL}/brands/sectioned?tag=$tag"
             if (filter == "Restaurant") {
                 urlString += "&type=restaurant"
+            } else if (filter == "Grocery") {
+                urlString += "&type=grocery"
             }
 
             val url = URL(urlString)
@@ -227,7 +225,6 @@ private suspend fun fetchPizzaPlaces(
             connection.connectTimeout = 15000
             connection.readTimeout = 15000
 
-            // Add auth token if available — matches iOS AuthManager.shared.getToken()
             AuthManager.getToken()?.let { token ->
                 connection.setRequestProperty("Authorization", "Bearer $token")
             }
@@ -245,19 +242,16 @@ private suspend fun fetchPizzaPlaces(
 
             for (i in 0 until sectionsArray.length()) {
                 val section = sectionsArray.getJSONObject(i)
-
                 val sectionId = section.optString("id", "")
                 val sectionName = section.optString("name", "")
                 val logoUrl = section.optString("logoUrl", "").takeIf { it.isNotEmpty() }
                 val bannerUrl = section.optString("bannerUrl", "").takeIf { it.isNotEmpty() }
 
-                // Parse carousel images
                 val carouselArray = section.optJSONArray("carouselImages")
                 val sectionCarouselImages = if (carouselArray != null) {
                     (0 until carouselArray.length()).mapNotNull { carouselArray.optString(it).takeIf { it.isNotEmpty() } }
                 } else emptyList()
 
-                // Find nearest location distance — matches iOS: section.locations.map(\.distance).min()
                 val locationsArray = section.optJSONArray("locations")
                 val nearestDistance = if (locationsArray != null && locationsArray.length() > 0) {
                     (0 until locationsArray.length()).mapNotNull {
@@ -265,7 +259,6 @@ private suspend fun fetchPizzaPlaces(
                     }.minOrNull() ?: 0.0
                 } else 0.0
 
-                // Parse tagged items — matches iOS: section.taggedItems?.filter { $0.available }
                 val taggedArray = section.optJSONArray("taggedItems")
                 val availableItems = mutableListOf<JSONObject>()
                 if (taggedArray != null) {
@@ -278,13 +271,11 @@ private suspend fun fetchPizzaPlaces(
                 }
 
                 if (availableItems.isNotEmpty()) {
-                    // Map each tagged item to a card — matches iOS taggedItems.map logic
                     for (taggedItem in availableItems) {
                         val itemName = taggedItem.optString("name", "")
                         val itemPrice = taggedItem.optDouble("price", 0.0)
                         val itemImageUrl = taggedItem.optString("imageUrl", "").takeIf { it.isNotEmpty() }
 
-                        // Image fallback: item image → carousel → banner → logo
                         val images = mutableListOf<String>()
                         if (itemImageUrl != null) images.add(itemImageUrl)
                         if (images.isEmpty()) images.addAll(sectionCarouselImages)
@@ -310,7 +301,6 @@ private suspend fun fetchPizzaPlaces(
                         )
                     }
                 } else {
-                    // No tagged items — show brand as a card — matches iOS fallback
                     val brandImages = mutableListOf<String>()
                     brandImages.addAll(sectionCarouselImages)
                     if (brandImages.isEmpty() && bannerUrl != null) brandImages.add(bannerUrl)
