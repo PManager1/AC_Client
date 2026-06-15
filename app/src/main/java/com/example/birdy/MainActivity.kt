@@ -261,7 +261,7 @@ fun BirdyAppContent() {
                                         selectedIsGrocery = true
                                         showStore = true
                                     },
-                                    onCategoryClick = { categoryName ->
+                                     onCategoryClick = { categoryName ->
                                         when (categoryName) {
                                             "Pizza" -> {
                                                 selectedTag = "pizza"
@@ -273,6 +273,14 @@ fun BirdyAppContent() {
                                                 selectedTag = "fast_food"
                                                 selectedTagTitle = "Fast Food"
                                                 selectedTagFilters = listOf("All", "Nearest", "Top Rated", "\$0 Delivery", "Deals")
+                                                showTagHome = true
+                                            }
+                                            else -> {
+                                                var tag = categoryName.lowercase().replace(" ", "_")
+                                                if (tag.endsWith("s")) tag = tag.dropLast(1)
+                                                selectedTag = tag
+                                                selectedTagTitle = categoryName
+                                                selectedTagFilters = listOf("All", "Restaurant")
                                                 showTagHome = true
                                             }
                                         }
@@ -350,8 +358,12 @@ fun BirdyAppContent() {
                                 ExploreScreen(
                                     onNavigateToSearch = { showSearchFood = true },
                                     onCategoryClick = { category ->
-                                        selectedCategory = category
-                                        showFoodPlaces = true
+                                        var tag = category.title.lowercase().replace(" ", "_")
+                                        if (tag.endsWith("s")) tag = tag.dropLast(1)
+                                        selectedTag = tag
+                                        selectedTagTitle = category.title
+                                        selectedTagFilters = listOf("All", "Restaurant")
+                                        showTagHome = true
                                     }
                                 )
                             }

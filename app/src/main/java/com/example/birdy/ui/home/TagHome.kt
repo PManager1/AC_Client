@@ -83,7 +83,7 @@ fun TagHomeScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF2F2F7))
+            .background(Color.White)
     ) {
         // Top Bar
         Row(
