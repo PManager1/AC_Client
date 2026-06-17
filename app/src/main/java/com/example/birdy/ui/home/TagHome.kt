@@ -251,6 +251,20 @@ private suspend fun fetchTagPlaces(
                     (0 until carouselArray.length()).mapNotNull { carouselArray.optString(it).takeIf { it.isNotEmpty() } }
                 } else emptyList()
 
+                val imageTags = mutableMapOf<String, List<String>>()
+                val imageTagsObj = section.optJSONObject("imageTags")
+                if (imageTagsObj != null) {
+                    for (key in imageTagsObj.keys()) {
+                        val arr = imageTagsObj.optJSONArray(key)
+                        if (arr != null) {
+                            imageTags[key] = (0 until arr.length()).map { arr.optString(it) }
+                        }
+                    }
+                }
+                val filteredImages = carouselImages.filter { url ->
+                    imageTags[url]?.contains(tag) == true
+                }.ifEmpty { carouselImages }
+
                 val locationsArray = section.optJSONArray("locations")
                 val nearestDistance = if (locationsArray != null && locationsArray.length() > 0) {
                     (0 until locationsArray.length()).mapNotNull {
@@ -275,7 +289,7 @@ private suspend fun fetchTagPlaces(
                         val itemPrice = taggedItem.optDouble("price", 0.0)
                         val itemImageUrl = taggedItem.optString("imageUrl", "").takeIf { it.isNotEmpty() }
 
-                        val images = if (itemImageUrl != null) listOf(itemImageUrl) else carouselImages
+                        val images = if (itemImageUrl != null) listOf(itemImageUrl) else filteredImages
 
                         items.add(
                             NewFoodRestaurant(
@@ -296,7 +310,7 @@ private suspend fun fetchTagPlaces(
                         )
                     }
                 } else {
-                    val brandImages = carouselImages
+                    val brandImages = filteredImages
 
                     items.add(
                         NewFoodRestaurant(
