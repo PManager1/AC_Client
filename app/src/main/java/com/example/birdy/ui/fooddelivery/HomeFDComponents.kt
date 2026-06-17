@@ -246,7 +246,7 @@ fun MainCategoryTabStrip(
                     text = mainCat.name,
                     fontSize = 16.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isSelected) orangeColor else Color.Gray
+                    color = if (isSelected) orangeColor else Color.Black
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 // Underline indicator

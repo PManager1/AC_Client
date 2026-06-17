@@ -63,7 +63,7 @@ fun HomeFDScreen(
     var showAddressSheet by remember { mutableStateOf(false) }
 
     // Main category tab state — matches iOS selectedMainCategory
-    var selectedMainCategory by remember { mutableStateOf("Food") }
+    var selectedMainCategory by remember { mutableStateOf("All") }
     val currentSubcategories = remember(selectedMainCategory) {
         HomeFDData.mainCategories.firstOrNull { it.name == selectedMainCategory }?.subcategories ?: emptyList()
     }
@@ -149,7 +149,7 @@ fun HomeFDScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // MARK: - "Fastest near you" heading for non-Food tabs
-            if (selectedMainCategory != "Food") {
+            if (selectedMainCategory != "Food" && selectedMainCategory != "All") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -205,7 +205,7 @@ fun HomeFDScreen(
             }
 
             // MARK: - Food Feed Content (only when Food tab selected)
-            if (selectedMainCategory == "Food") {
+            if (selectedMainCategory == "All" || selectedMainCategory == "Food" || selectedMainCategory == "Drinks") {
                 // Featured Banners or Skeleton
                 if (isLoadingFeed) {
                     SkeletonPromoBanner(modifier = Modifier.padding(horizontal = 16.dp))
