@@ -149,7 +149,7 @@ fun HomeFDScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // MARK: - "Fastest near you" heading for non-Food tabs
-            if (selectedMainCategory != "Food" && selectedMainCategory != "All") {
+            if (selectedMainCategory != "Food" && selectedMainCategory != "All" && selectedMainCategory != "Drinks") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
