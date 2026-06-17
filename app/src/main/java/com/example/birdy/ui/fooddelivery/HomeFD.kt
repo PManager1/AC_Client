@@ -72,6 +72,14 @@ fun HomeFDScreen(
     var groceryStores by remember { mutableStateOf<List<GroceryStore>>(emptyList()) }
     var isLoadingGroceryStores by remember { mutableStateOf(false) }
 
+    // Drink brands (tag-filtered from /brands)
+    var drinkBrands by remember { mutableStateOf<List<FeedRestaurant>>(emptyList()) }
+    var isLoadingDrinkBrands by remember { mutableStateOf(false) }
+
+    // Food brands (tag-filtered from /brands)
+    var foodBrands by remember { mutableStateOf<List<FeedRestaurant>>(emptyList()) }
+    var isLoadingFoodBrands by remember { mutableStateOf(false) }
+
     // API-driven data
     var homeFeed by remember { mutableStateOf<HomeFeedData?>(null) }
     var isLoadingFeed by remember { mutableStateOf(true) }
@@ -99,6 +107,32 @@ fun HomeFDScreen(
             groceryStores = stores
             isLoadingGroceryStores = false
             println("✅ [HomeFDScreen] Loaded ${stores.size} grocery stores")
+        }
+    }
+
+    // Fetch drink brands when Drinks tab is selected
+    LaunchedEffect(selectedMainCategory) {
+        if (selectedMainCategory == "Drinks" && drinkBrands.isEmpty()) {
+            isLoadingDrinkBrands = true
+            val brands = withContext(Dispatchers.IO) {
+                HomeFDData.fetchTaggedFeedRestaurants(HomeFDData.drinkTags)
+            }
+            drinkBrands = brands
+            isLoadingDrinkBrands = false
+            println("✅ [HomeFDScreen] Loaded ${brands.size} drink-tagged brands")
+        }
+    }
+
+    // Fetch food brands when Food tab is selected
+    LaunchedEffect(selectedMainCategory) {
+        if (selectedMainCategory == "Food" && foodBrands.isEmpty()) {
+            isLoadingFoodBrands = true
+            val brands = withContext(Dispatchers.IO) {
+                HomeFDData.fetchTaggedFeedRestaurants(HomeFDData.foodTags)
+            }
+            foodBrands = brands
+            isLoadingFoodBrands = false
+            println("✅ [HomeFDScreen] Loaded ${brands.size} food-tagged brands")
         }
     }
 
@@ -149,7 +183,7 @@ fun HomeFDScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // MARK: - "Fastest near you" heading for non-Food tabs
-            if (selectedMainCategory != "Food" && selectedMainCategory != "All" && selectedMainCategory != "Drinks") {
+            if (selectedMainCategory != "Food" && selectedMainCategory != "All") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -221,15 +255,34 @@ fun HomeFDScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Dynamic Sections or Skeletons
-                if (isLoadingFeed) {
+                if (isLoadingFeed || (selectedMainCategory == "Drinks" && isLoadingDrinkBrands) || (selectedMainCategory == "Food" && isLoadingFoodBrands)) {
                     SkeletonFeedSection(modifier = Modifier.padding(horizontal = 0.dp))
                     SkeletonFeedSection(modifier = Modifier.padding(horizontal = 0.dp))
                 } else {
-                    homeFeed?.sections?.forEach { section ->
+                    val sections = when (selectedMainCategory) {
+                        "Drinks" -> listOf(
+                            FeedSection("Fastest near you", drinkBrands),
+                            FeedSection("Most loved", drinkBrands),
+                            FeedSection("Most Popular local", drinkBrands)
+                        )
+                        "Food" -> listOf(
+                            FeedSection("Fastest near you", foodBrands),
+                            FeedSection("Most loved", foodBrands),
+                            FeedSection("Most Popular local", foodBrands)
+                        )
+                        else -> homeFeed?.sections ?: emptyList()
+                    }
+                    sections.forEach { section ->
                         FeedRestaurantSection(
                             title = section.heading,
                             restaurants = section.restaurants,
-                            onRestaurantClick = { onRestaurantClick(it.id) }
+                            onRestaurantClick = { restaurant ->
+                                if (restaurant.isBrandItem) {
+                                    onGroceryStoreClick(restaurant.id, restaurant.restaurantName)
+                                } else {
+                                    onRestaurantClick(restaurant.id)
+                                }
+                            }
                         )
 
                         Spacer(modifier = Modifier.height(24.dp))

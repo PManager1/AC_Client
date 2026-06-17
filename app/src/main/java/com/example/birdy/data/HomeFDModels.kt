@@ -72,7 +72,8 @@ data class FeedRestaurant(
     val isSponsored: Boolean,
     val foodItems: List<FeedFoodItem>,
     val isNew: Boolean,
-    val phone: String
+    val phone: String,
+    val isBrandItem: Boolean = false
 ) {
     /** Format review count: 6000 → "6k+", 1200 → "1.2k+", 500 → "500+" */
     val reviewsDisplay: String
@@ -238,6 +239,63 @@ object HomeFDData {
                 order = obj.optInt("order", 0),
                 isActive = obj.optBoolean("isActive", true)
             )
+        }
+    }
+
+    // Drink tags matching Drinks subcategories
+    val drinkTags = listOf("coffee", "bubble_tea", "juice", "smoothie", "soda", "tea", "energy_drink", "milkshake", "lemonade")
+
+    // Food tags matching Food subcategories
+    val foodTags = listOf("fast_food", "pizza", "burger", "chicken", "dessert", "healthy", "indian", "chinese", "pho", "mexican", "korean", "soup", "sandwich", "asian", "halal", "thai", "salad", "seafood", "japanese")
+
+    /** Fetch brands from /brands and filter by any of the given tags. Converts to FeedRestaurant */
+    fun fetchTaggedFeedRestaurants(tags: List<String>): List<FeedRestaurant> {
+        return try {
+            val url = URL("$API_BASE_URL/brands")
+            val connection = url.openConnection()
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 15_000
+            val json = connection.getInputStream().bufferedReader().use { it.readText() }
+            val array = JSONArray(json)
+            (0 until array.length()).mapNotNull { i ->
+                val obj = array.getJSONObject(i)
+                val brandTags = obj.optJSONArray("tags")
+                if (brandTags == null) return@mapNotNull null
+                val matched = (0 until brandTags.length()).any { j -> tags.contains(brandTags.getString(j)) }
+                if (!matched) return@mapNotNull null
+
+                val brandId = obj.optString("id", "")
+                val brandName = obj.optString("name", "")
+                val logoUrl = obj.optString("logoUrl", "")
+                val carouselArray = obj.optJSONArray("carouselImages")
+                val carousel = if (carouselArray != null) {
+                    (0 until carouselArray.length()).map { carouselArray.getString(it) }
+                } else emptyList()
+                val images = if (carousel.isEmpty()) {
+                    if (logoUrl.isEmpty()) emptyList() else listOf(logoUrl)
+                } else carousel
+
+                FeedRestaurant(
+                    id = brandId,
+                    restaurantName = brandName,
+                    logoURL = logoUrl,
+                    images = images,
+                    rating = 4.5,
+                    reviewCount = 100,
+                    distance = 1.0,
+                    deliveryTime = 20,
+                    deliveryFee = 0.0,
+                    promoText = "",
+                    isSponsored = false,
+                    foodItems = emptyList(),
+                    isNew = false,
+                    phone = "",
+                    isBrandItem = true
+                )
+            }
+        } catch (e: Exception) {
+            println("❌ [HomeFDData] Failed to fetch /brands for tags: ${e.message}")
+            emptyList()
         }
     }
 
