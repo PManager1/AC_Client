@@ -187,38 +187,7 @@ fun SelectAddressSheet(
                         text = "Loading addresses...",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.Gray
-                    )
-                }
-            } else {
-                // Scrollable address list
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // Current Location option
-                    AddressSelectionRow(
-                        title = "Current Location",
-                        subtitle = "Use your GPS location",
-                        icon = Icons.Default.LocationOn,
-                        gateCode = null,
-                        isSelected = selectedId == "current_location",
-                        onClick = {
-                            selectedId = "current_location"
-                            onAddressSelected(
-                                Address(
-                                    id = "current_location",
-                                    street = "Current Location",
-                                    cityStateZip = "Using GPS"
-                                )
-                            )
-                            onDismiss()
-                        }
-                    )
-
+                        color = Color.Black
                     if (localAddresses.isNotEmpty()) {
                         HorizontalDivider(
                             modifier = Modifier.padding(vertical = 4.dp),
@@ -280,7 +249,7 @@ fun SelectAddressSheet(
                         text = "Add New Address",
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2196F3)
+                        color = Color.Black
                     )
                 }
 
@@ -382,7 +351,7 @@ private fun GateCodeEntrySheet(
             Text(
                 text = "Add a gate or door PIN so your driver can enter at arrival.",
                 fontSize = 14.sp,
-                color = Color.Gray,
+                color = Color.Black,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
@@ -396,7 +365,7 @@ private fun GateCodeEntrySheet(
                 placeholder = {
                     Text(
                         text = "e.g. #1234, call manager for code, etc.",
-                        color = Color.Gray,
+                        color = Color.Black,
                         fontSize = 15.sp
                     )
                 },
@@ -444,13 +413,13 @@ private fun GateCodeEntrySheet(
                         text = "Your Privacy",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.Gray
+                        color = Color.Black
                     )
                 }
                 Text(
                     text = "Your gate code is never shared publicly or stored in plain text. It is only shared with your U-DO driver at the time of arrival at your address.",
                     fontSize = 11.sp,
-                    color = Color.Gray,
+                    color = Color.Black,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
@@ -487,7 +456,7 @@ private fun GateCodeEntrySheet(
                     text = "Skip for now",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.Gray
+                    color = Color.Black
                 )
             }
 
@@ -542,14 +511,14 @@ private fun AddressSelectionRow(
             ) {
                 Text(
                     text = title,
-                    fontSize = 17.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
                 )
                 Text(
                     text = subtitle,
                     fontSize = 14.sp,
-                    color = Color.Gray,
+                    color = Color.Black,
                     maxLines = 1
                 )
 
