@@ -126,6 +126,7 @@ fun SelectAddressSheet(
                 .fillMaxWidth()
                 .height(500.dp)
                 .background(Color.White)
+                .verticalScroll(rememberScrollState())
         ) {
             // Header
             Row(
@@ -157,7 +158,7 @@ fun SelectAddressSheet(
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = "Confirm",
-                            tint = Color(0xFF4CAF50), // Green
+                            tint = Color(0xFFD95F02), // Burnt orange
                             modifier = Modifier.size(32.dp)
                         )
                     }
@@ -188,23 +189,33 @@ fun SelectAddressSheet(
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.Black
-                    if (localAddresses.isNotEmpty()) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = 4.dp),
-                            color = Color.Gray.copy(alpha = 0.2f)
-                        )
-                    }
-
-                    // Saved addresses
-                    localAddresses.forEach { address ->
-                        AddressSelectionRow(
-                            title = address.street,
-                            subtitle = address.cityStateZip,
-                            icon = if (address.isDefault) Icons.Default.Star else Icons.Default.LocationOn,
-                            gateCode = address.gateCode,
-                            isSelected = selectedId == address.id,
-                            onClick = {
-                                selectedId = address.id
+                    )
+                }
+            } else if (errorMessage != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(vertical = 40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = errorMessage ?: "",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.Red
+                    )
+                }
+            } else {
+                // Saved addresses
+                localAddresses.forEach { address ->
+                    AddressSelectionRow(
+                        title = address.street,
+                        subtitle = address.cityStateZip,
+                        icon = if (address.isDefault) Icons.Default.Star else Icons.Default.LocationOn,
+                        gateCode = address.gateCode,
+                        isSelected = selectedId == address.id,
+                        onClick = {
+                            selectedId = address.id
                             onAddressSelected(address)
                             onDismiss()
                         },
@@ -227,7 +238,6 @@ fun SelectAddressSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
-                            // Show gate code sheet for new address
                             isAddingNewAddress = true
                             gateCodeInput = ""
                             editingAddressId = null
@@ -254,7 +264,6 @@ fun SelectAddressSheet(
                 }
 
                 Spacer(modifier = Modifier.height(40.dp))
-                }
             }
         }
     }
@@ -406,7 +415,7 @@ private fun GateCodeEntrySheet(
                     Icon(
                         imageVector = Icons.Default.Shield,
                         contentDescription = null,
-                        tint = Color(0xFF4CAF50),
+                        tint = Color(0xFFD95F02),
                         modifier = Modifier.size(13.dp)
                     )
                     Text(
@@ -562,7 +571,7 @@ private fun AddressSelectionRow(
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = null,
-                    tint = Color(0xFF4CAF50), // Green
+                    tint = Color(0xFFD95F02), // Burnt orange
                     modifier = Modifier.size(24.dp)
                 )
             } else {
