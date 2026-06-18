@@ -214,7 +214,7 @@ object HomeFDData {
     /** Blocking network call — must be called from a background thread */
     fun fetchGroceryStores(): List<GroceryStore> {
         return try {
-            val url = URL("$API_BASE_URL/brands")
+            val url = URL("$API_BASE_URL/brands?type=grocery")
             val connection = url.openConnection()
             connection.connectTimeout = 10_000
             connection.readTimeout = 15_000
@@ -228,8 +228,10 @@ object HomeFDData {
 
     private fun parseGroceryStores(json: String): List<GroceryStore> {
         val array = JSONArray(json)
-        return (0 until array.length()).map { i ->
+        return (0 until array.length()).mapNotNull { i ->
             val obj = array.getJSONObject(i)
+            val brandType = obj.optString("brandType", "")
+            if (brandType != "grocery") return@mapNotNull null
             GroceryStore(
                 id = obj.optString("id", ""),
                 name = obj.optString("name", "Store"),
