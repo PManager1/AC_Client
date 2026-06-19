@@ -52,6 +52,100 @@ object AddressService {
         }
     }
 
+    fun createAddress(street: String, cityStateZip: String, latitude: Double, longitude: Double, gateCode: String?, token: String): Address? {
+        println("🔍 [AddressService] Creating address: $street")
+        return try {
+            val jsonBody = org.json.JSONObject().apply {
+                put("street", street)
+                put("cityStateZip", cityStateZip)
+                put("latitude", latitude)
+                put("longitude", longitude)
+                if (!gateCode.isNullOrEmpty()) put("gateCode", gateCode)
+            }
+
+            val url = URL("${Config.API_BASE_URL}/addresses")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection.setRequestProperty("Authorization", "Bearer $token")
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.doOutput = true
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 15_000
+            connection.outputStream.write(jsonBody.toString().toByteArray())
+
+            val responseCode = connection.responseCode
+            println("🔍 [AddressService] Create response status: $responseCode")
+
+            if (responseCode in 200..299) {
+                val json = connection.inputStream.bufferedReader().use { it.readText() }
+                val obj = org.json.JSONObject(json)
+                Address(
+                    id = obj.optString("id", ""),
+                    street = obj.optString("street", ""),
+                    cityStateZip = obj.optString("cityStateZip", ""),
+                    gateCode = obj.optString("gateCode", "").ifEmpty { null },
+                    isDefault = obj.optBoolean("isDefault", false),
+                    latitude = obj.optDouble("latitude", 0.0),
+                    longitude = obj.optDouble("longitude", 0.0)
+                )
+            } else {
+                val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "No details"
+                println("❌ [AddressService] Failed to create address. Status: $responseCode. Body: $errorBody")
+                null
+            }
+        } catch (e: Exception) {
+            println("❌ [AddressService] Failed to create address: ${e.message}")
+            null
+        }
+    }
+
+    fun updateAddress(id: String, street: String, cityStateZip: String, latitude: Double, longitude: Double, gateCode: String?, token: String): Address? {
+        println("🔍 [AddressService] Updating address: $id")
+        return try {
+            val jsonBody = org.json.JSONObject().apply {
+                put("street", street)
+                put("cityStateZip", cityStateZip)
+                put("latitude", latitude)
+                put("longitude", longitude)
+                if (!gateCode.isNullOrEmpty()) put("gateCode", gateCode)
+            }
+
+            val url = URL("${Config.API_BASE_URL}/addresses/$id")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "PUT"
+            connection.setRequestProperty("Authorization", "Bearer $token")
+            connection.setRequestProperty("Content-Type", "application/json")
+            connection.doOutput = true
+            connection.connectTimeout = 10_000
+            connection.readTimeout = 15_000
+            connection.outputStream.write(jsonBody.toString().toByteArray())
+
+            val responseCode = connection.responseCode
+            println("🔍 [AddressService] Update response status: $responseCode")
+
+            if (responseCode in 200..299) {
+                val json = connection.inputStream.bufferedReader().use { it.readText() }
+                val obj = org.json.JSONObject(json)
+                Address(
+                    id = obj.optString("id", ""),
+                    street = obj.optString("street", ""),
+                    cityStateZip = obj.optString("cityStateZip", ""),
+                    gateCode = obj.optString("gateCode", "").ifEmpty { null },
+                    isDefault = obj.optBoolean("isDefault", false),
+                    latitude = obj.optDouble("latitude", 0.0),
+                    longitude = obj.optDouble("longitude", 0.0)
+                )
+            } else {
+                val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "No details"
+                println("❌ [AddressService] Failed to update address. Status: $responseCode. Body: $errorBody")
+                null
+            }
+        } catch (e: Exception) {
+            println("❌ [AddressService] Failed to update address: ${e.message}")
+            null
+        }
+    }
+
     fun setDefaultAddress(addressId: String, token: String): Address? {
         println("🔍 [AddressService] Setting default address: $addressId")
         return try {

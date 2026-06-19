@@ -15,4 +15,7 @@ object Config {
 
     // Mapbox — public access token for map rendering (loaded from local.properties via BuildConfig)
     val MAPBOX_ACCESS_TOKEN: String = com.example.birdy.BuildConfig.MAPBOX_ACCESS_TOKEN
+
+    // Google — matches iOS BirdyKit/Config.swift
+    const val GOOGLE_API_KEY = "AIzaSyDTm4xeMjg5_GFa2YYUE6zsk2-vagqlAno"
 }

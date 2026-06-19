@@ -43,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import com.example.birdy.data.AddressService
 import com.example.birdy.data.AuthManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // MARK: - Address Model (matches iOS Address with gateCode)
@@ -92,6 +94,9 @@ fun SelectAddressSheet(
     var gateCodeInput by remember { mutableStateOf("") }
     var editingAddressId by remember { mutableStateOf<String?>(null) }
     var isAddingNewAddress by remember { mutableStateOf(false) }
+    var showAddressSearch by remember { mutableStateOf(false) }
+    var pendingAddressData by remember { mutableStateOf<AddressSearchResult?>(null) }
+    val scope = rememberCoroutineScope()
 
     // Addresses fetched from API
     val localAddresses = remember { mutableStateListOf<Address>() }
@@ -241,7 +246,7 @@ fun SelectAddressSheet(
                             isAddingNewAddress = true
                             gateCodeInput = ""
                             editingAddressId = null
-                            showGateCodeSheet = true
+                            showAddressSearch = true
                         }
                         .padding(vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -276,8 +281,27 @@ fun SelectAddressSheet(
             onSave = { code ->
                 showGateCodeSheet = false
                 if (isAddingNewAddress) {
-                    // TODO: Navigate to address search, then save gate code
-                    // For now just show a placeholder
+                    val data = pendingAddressData
+                    if (data != null) {
+                        scope.launch {
+                            val token = AuthManager.getToken(context)
+                            if (!token.isNullOrEmpty()) {
+                                val created = withContext(Dispatchers.IO) {
+                                    AddressService.createAddress(
+                                        data.street, data.cityStateZip,
+                                        data.latitude, data.longitude,
+                                        code.ifEmpty { null }, token
+                                    )
+                                }
+                                if (created != null) {
+                                    localAddresses.add(created)
+                                    onAddressSelected(created)
+                                    selectedId = created.id
+                                }
+                            }
+                            pendingAddressData = null
+                        }
+                    }
                 } else {
                     // Update existing address gate code
                     val addrId = editingAddressId
@@ -296,6 +320,21 @@ fun SelectAddressSheet(
                 showGateCodeSheet = false
                 editingAddressId = null
                 isAddingNewAddress = false
+            }
+        )
+    }
+
+    // MARK: - Address Search Screen
+    if (showAddressSearch) {
+        AddressSearchScreen(
+            onDismiss = {
+                showAddressSearch = false
+                isAddingNewAddress = false
+            },
+            onAddressSelected = { street, cityStateZip, lat, lng ->
+                showAddressSearch = false
+                pendingAddressData = AddressSearchResult(street, cityStateZip, lat, lng)
+                showGateCodeSheet = true
             }
         )
     }

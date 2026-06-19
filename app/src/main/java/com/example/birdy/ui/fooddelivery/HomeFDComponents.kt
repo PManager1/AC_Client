@@ -417,7 +417,7 @@ fun SkeletonBlock(
         modifier = modifier
             .width(width)
             .height(height)
-            .background(Color(0xFFF5F5F5), RoundedCornerShape(cornerRadius))
+            .background(Color.White, RoundedCornerShape(cornerRadius))
     ) {
         ShimmerBox(
             modifier = Modifier
@@ -662,7 +662,6 @@ fun RestaurantSection(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Section header with title + arrow button
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -691,7 +690,6 @@ fun RestaurantSection(
             )
         }
 
-        // Horizontal restaurant cards
         LazyRow(
             state = listState,
             horizontalArrangement = Arrangement.spacedBy(15.dp),
@@ -718,7 +716,6 @@ fun DynamicPromoBannerView(
     modifier: Modifier = Modifier,
     onAction: () -> Unit = {}
 ) {
-    // Parse gradient colors from hex strings (e.g. "#4facfe" → Color)
     val gradientColors = if (banner.gradientColors.isNotEmpty()) {
         banner.gradientColors.mapNotNull { hex ->
             try {
@@ -771,7 +768,6 @@ fun DynamicPromoBannerView(
                     )
                 }
             }
-            // Image or placeholder
             if (banner.imageUrl.isNotEmpty() && banner.imageUrl.startsWith("http")) {
                 AsyncImage(
                     model = banner.imageUrl,
