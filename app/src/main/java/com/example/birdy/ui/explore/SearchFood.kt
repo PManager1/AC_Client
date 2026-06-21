@@ -78,7 +78,7 @@ private data class BrandSuggestion(
     val id: String,
     val name: String,
     val logoUrl: String,
-    val tags: List<String>
+    val tags: List<String>?
 )
 
 data class RecentSearchEntry(
@@ -506,7 +506,7 @@ private fun BrandSearchResultRow(
                 color = Color.Black
             )
             Text(
-                text = brand.tags.take(3).joinToString(" • "),
+                text = brand.tags?.take(3)?.joinToString(" • ") ?: "",
                 fontSize = 13.sp,
                 color = Color.Gray
             )
