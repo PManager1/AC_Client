@@ -36,7 +36,11 @@ import com.example.birdy.data.GroceryStore
 import com.example.birdy.data.HomeFDData
 import com.example.birdy.data.HomeFeedData
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * Home FD Screen — replicates iOS HomeFD.swift
@@ -82,6 +86,37 @@ fun HomeFDScreen(
     var foodBrands by remember { mutableStateOf<List<FeedRestaurant>>(emptyList()) }
     var isLoadingFoodBrands by remember { mutableStateOf(false) }
 
+    // Favorites — shared source of truth across all tabs
+    var favoriteRestaurantIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    fun toggleFavorite(restaurantId: String, nowFavorited: Boolean) {
+        favoriteRestaurantIds = if (nowFavorited) favoriteRestaurantIds + restaurantId
+        else favoriteRestaurantIds - restaurantId
+
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                val token = com.example.birdy.data.AuthManager.getToken() ?: return@launch
+                val url = if (nowFavorited) {
+                    URL("${com.example.birdy.data.Config.API_BASE_URL}/favorites")
+                } else {
+                    URL("${com.example.birdy.data.Config.API_BASE_URL}/favorites?restaurantId=$restaurantId")
+                }
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = if (nowFavorited) "POST" else "DELETE"
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                if (nowFavorited) {
+                    conn.outputStream.write("""{"restaurantId":"$restaurantId"}""".toByteArray())
+                }
+                println("❤️ [Fav-AC] ${if (nowFavorited) "ADD" else "REMOVE"} $restaurantId → ${conn.responseCode}")
+                conn.disconnect()
+            } catch (e: Exception) {
+                println("❌ [Fav-AC] Error: ${e.message}")
+            }
+        }
+    }
+
     // API-driven data
     var homeFeed by remember { mutableStateOf<HomeFeedData?>(null) }
     var isLoadingFeed by remember { mutableStateOf(true) }
@@ -121,6 +156,7 @@ fun HomeFDScreen(
             }
             drinkBrands = brands
             isLoadingDrinkBrands = false
+            brands.forEach { if (it.isFavorited) favoriteRestaurantIds = favoriteRestaurantIds + it.id }
             println("✅ [HomeFDScreen] Loaded ${brands.size} drink-tagged brands")
         }
     }
@@ -134,6 +170,7 @@ fun HomeFDScreen(
             }
             foodBrands = brands
             isLoadingFoodBrands = false
+            brands.forEach { if (it.isFavorited) favoriteRestaurantIds = favoriteRestaurantIds + it.id }
             println("✅ [HomeFDScreen] Loaded ${brands.size} food-tagged brands")
         }
     }
@@ -278,6 +315,8 @@ fun HomeFDScreen(
                         FeedRestaurantSection(
                             title = section.heading,
                             restaurants = section.restaurants,
+                            favoriteIds = favoriteRestaurantIds,
+                            onToggleFavorite = { id -> toggleFavorite(id, id !in favoriteRestaurantIds) },
                             onRestaurantClick = { restaurant ->
                                 if (restaurant.isBrandItem) {
                                     onGroceryStoreClick(restaurant.id, restaurant.restaurantName)

@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
@@ -797,6 +798,8 @@ fun DynamicPromoBannerView(
 fun FeedRestaurantCard(
     restaurant: FeedRestaurant,
     modifier: Modifier = Modifier,
+    isFavorited: Boolean = false,
+    onToggleFavorite: () -> Unit = {},
     onClick: () -> Unit = {}
 ) {
     val validImages = restaurant.images.filter { it.isNotEmpty() }
@@ -878,11 +881,13 @@ fun FeedRestaurantCard(
                     .align(Alignment.TopEnd)
                     .padding(10.dp)
                     .background(Color.White, CircleShape)
+                    .clickable { onToggleFavorite() }
                     .padding(10.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.FavoriteBorder,
+                    imageVector = if (isFavorited) Icons.Filled.Favorite else Icons.Default.FavoriteBorder,
                     contentDescription = "Favorite",
+                    tint = if (isFavorited) Color.Red else Color.Gray.copy(alpha = 0.6f),
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -948,6 +953,8 @@ fun FeedRestaurantSection(
     title: String,
     restaurants: List<FeedRestaurant>,
     modifier: Modifier = Modifier,
+    favoriteIds: Set<String> = emptySet(),
+    onToggleFavorite: (String) -> Unit = {},
     onRestaurantClick: (FeedRestaurant) -> Unit = {}
 ) {
     val listState = rememberLazyListState()
@@ -998,6 +1005,8 @@ fun FeedRestaurantSection(
             itemsIndexed(restaurants) { _, restaurant ->
                 FeedRestaurantCard(
                     restaurant = restaurant,
+                    isFavorited = favoriteIds.contains(restaurant.id),
+                    onToggleFavorite = { onToggleFavorite(restaurant.id) },
                     onClick = { onRestaurantClick(restaurant) }
                 )
             }

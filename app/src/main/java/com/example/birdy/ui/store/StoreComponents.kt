@@ -45,7 +45,8 @@ fun ToggleBtn(
 @Composable
 fun HeaderCircleButton(
     icon: ImageVector,
-    onClick: () -> Unit = {}
+    onClick: () -> Unit = {},
+    tint: Color = Color.Black
 ) {
     Box(
         modifier = Modifier
@@ -59,7 +60,7 @@ fun HeaderCircleButton(
             imageVector = icon,
             contentDescription = null,
             modifier = Modifier.size(16.dp),
-            tint = Color.Black
+            tint = tint
         )
     }
 }

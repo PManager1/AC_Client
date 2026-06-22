@@ -3,6 +3,7 @@ package com.example.birdy.data
 import com.example.birdy.data.Config.API_BASE_URL
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
 import java.net.URL
 
 // MARK: - Legacy Models (kept for backward compatibility)
@@ -73,7 +74,8 @@ data class FeedRestaurant(
     val foodItems: List<FeedFoodItem>,
     val isNew: Boolean,
     val phone: String,
-    val isBrandItem: Boolean = false
+    val isBrandItem: Boolean = false,
+    val isFavorited: Boolean = false
 ) {
     /** Format review count: 6000 → "6k+", 1200 → "1.2k+", 500 → "500+" */
     val reviewsDisplay: String
@@ -254,10 +256,11 @@ object HomeFDData {
     fun fetchTaggedFeedRestaurants(tags: List<String>): List<FeedRestaurant> {
         return try {
             val url = URL("$API_BASE_URL/brands")
-            val connection = url.openConnection()
+            val connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = 10_000
             connection.readTimeout = 15_000
-            val json = connection.getInputStream().bufferedReader().use { it.readText() }
+            AuthManager.getToken()?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
+            val json = connection.inputStream.bufferedReader().use { it.readText() }
             val array = JSONArray(json)
             (0 until array.length()).mapNotNull { i ->
                 val obj = array.getJSONObject(i)
@@ -292,7 +295,8 @@ object HomeFDData {
                     foodItems = emptyList(),
                     isNew = false,
                     phone = "",
-                    isBrandItem = true
+                    isBrandItem = true,
+                    isFavorited = obj.optBoolean("is_favorite", false)
                 )
             }
         } catch (e: Exception) {
@@ -307,10 +311,11 @@ object HomeFDData {
     fun fetchHomeFeed(): HomeFeedData? {
         return try {
             val url = URL("$API_BASE_URL/homefeed")
-            val connection = url.openConnection()
+            val connection = url.openConnection() as HttpURLConnection
             connection.connectTimeout = 10_000
             connection.readTimeout = 15_000
-            val json = connection.getInputStream().bufferedReader().use { it.readText() }
+            AuthManager.getToken()?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
+            val json = connection.inputStream.bufferedReader().use { it.readText() }
             parseHomeFeed(json)
         } catch (e: Exception) {
             println("❌ [HomeFDData] Failed to fetch /homefeed: ${e.message}")
@@ -384,7 +389,8 @@ object HomeFDData {
                     isSponsored = r.optBoolean("isSponsored", false),
                     foodItems = foodItems,
                     isNew = r.optBoolean("isNew", false),
-                    phone = r.optString("phone", "")
+                    phone = r.optString("phone", ""),
+                    isFavorited = r.optBoolean("is_favorite", false)
                 )
             }
             FeedSection(heading = heading, restaurants = restaurants)

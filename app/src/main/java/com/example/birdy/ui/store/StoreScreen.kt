@@ -77,7 +77,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
+import com.example.birdy.data.AuthManager
 import com.example.birdy.data.CartItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import java.net.HttpURLConnection
+import java.net.URL
 import com.example.birdy.data.CartManager
 import java.io.InputStream
 
@@ -102,6 +108,8 @@ fun StoreScreen(
     var showRestaurantInfo by remember { mutableStateOf(false) }
     var showAislesSheet by remember { mutableStateOf(false) }
     var selectedCategory by remember { mutableStateOf<String?>(null) }
+    var isFavorited by remember { mutableStateOf(false) }
+    var favoriteRestaurantIds by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // Load data: two-phase — quick brand fetch dismisses skeleton, then full fetch loads menu
     val context = LocalContext.current
@@ -139,6 +147,57 @@ fun StoreScreen(
             loadError = true
         }
         isLoading = false
+    }
+
+    // Fetch favorite status on load
+    LaunchedEffect(restaurantId) {
+        try {
+            val token = AuthManager.getToken(context) ?: return@LaunchedEffect
+            val url = URL("${Config.API_BASE_URL}/favorites")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.setRequestProperty("Authorization", "Bearer $token")
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.connectTimeout = 10000
+            conn.readTimeout = 10000
+            if (conn.responseCode == 200) {
+                val body = conn.inputStream.bufferedReader().readText()
+                val arr = org.json.JSONArray(body)
+                val ids = mutableListOf<String>()
+                for (i in 0 until arr.length()) {
+                    arr.getJSONObject(i).optString("restaurantId", "")?.let { if (it.isNotEmpty()) ids.add(it) }
+                }
+                favoriteRestaurantIds = ids
+                isFavorited = ids.contains(restaurantId)
+            }
+            conn.disconnect()
+        } catch (e: Exception) {
+            println("❌ [Fav] GET error: ${e.message}")
+        }
+    }
+
+    fun toggleFavorite(restaurantId: String, nowFavorited: Boolean, context: android.content.Context) {
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                val token = AuthManager.getToken(context) ?: return@launch
+                val url = if (nowFavorited) {
+                    URL("${com.example.birdy.data.Config.API_BASE_URL}/favorites")
+                } else {
+                    URL("${com.example.birdy.data.Config.API_BASE_URL}/favorites?restaurantId=$restaurantId")
+                }
+                val conn = url.openConnection() as HttpURLConnection
+                conn.requestMethod = if (nowFavorited) "POST" else "DELETE"
+                conn.setRequestProperty("Authorization", "Bearer $token")
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.doOutput = true
+                if (nowFavorited) {
+                    conn.outputStream.write("""{"restaurantId":"$restaurantId"}""".toByteArray())
+                }
+                println("❤️ [Fav-AC-Store] ${if (nowFavorited) "ADD" else "REMOVE"} $restaurantId → ${conn.responseCode}")
+                conn.disconnect()
+            } catch (e: Exception) {
+                println("❌ [Fav-AC-Store] Error: ${e.message}")
+            }
+        }
     }
 
     // Loading skeleton — clean white shimmer (matches iOS)
@@ -434,7 +493,15 @@ fun StoreScreen(
                     HeaderCircleButton(icon = Icons.AutoMirrored.Filled.ArrowBack, onClick = onBack)
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         HeaderCircleButton(icon = Icons.Default.Search) { onSearchClick?.invoke() }
-                        HeaderCircleButton(icon = Icons.Default.FavoriteBorder) { /* TODO */ }
+                        HeaderCircleButton(
+                            icon = if (isFavorited) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            onClick = {
+                                val newState = !isFavorited
+                                isFavorited = newState
+                                toggleFavorite(restaurantId, newState, context)
+                            },
+                            tint = if (isFavorited) Color.Red else Color.Black
+                        )
                         HeaderCircleButton(icon = Icons.Default.MoreVert) { /* TODO */ }
                     }
                 }
