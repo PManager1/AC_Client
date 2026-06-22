@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.example.birdy.data.AuthManager
 import com.example.birdy.data.CartItem
+import com.example.birdy.data.Config
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch

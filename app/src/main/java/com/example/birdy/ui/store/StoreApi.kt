@@ -2,6 +2,7 @@ package com.example.birdy.ui.store
 
 import android.content.Context
 import android.util.Log
+import com.example.birdy.data.AuthManager
 import com.example.birdy.data.Config
 import com.example.birdy.data.LocationManager
 import kotlinx.coroutines.Dispatchers
@@ -355,7 +356,8 @@ suspend fun fetchBrandQuick(restaurantId: String): StoreData? {
                         location_info = StoreLocationInfo(
                             distance = "", delivery_fee = 0.0, delivery_time_est = "20-35 min",
                             address = "", phone = null, operating_hours = null,
-                            latitude = 0.0, longitude = 0.0
+                            latitude = 0.0, longitude = 0.0,
+                            location_id = ""
                         ),
                         menu = emptyList() // Menu loaded in full fetch
                     )
@@ -427,6 +429,9 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                     var deliveryEnabled: Boolean? = null
                     var pickupEnabled: Boolean? = null
                     var deliveryRadius: Double? = null
+                    var locationId = ""
+                    var locationRating = 0.0
+                    var locationReviewCount = 0
 
                     if (storeObj != null) {
                         val dist = storeObj.optDouble("distance", 0.0)
@@ -452,6 +457,9 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                         deliveryEnabled = if (storeObj.has("deliveryEnabled")) storeObj.optBoolean("deliveryEnabled", false) else null
                         pickupEnabled = if (storeObj.has("pickupEnabled")) storeObj.optBoolean("pickupEnabled", false) else null
                         deliveryRadius = if (storeObj.has("deliveryRadius")) storeObj.optDouble("deliveryRadius", 0.0) else null
+                        locationId = storeObj.optString("id", "")
+                        locationRating = storeObj.optDouble("rating", 0.0)
+                        locationReviewCount = storeObj.optInt("reviewCount", 0)
                         // Parse hours — handles both structured {monday: {open, close, closed}} and flat {Mon: "10 AM - 11 PM"}
                         val hoursObj = storeObj.optJSONObject("hours")
                         if (hoursObj != null) {
@@ -552,14 +560,17 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                         }
                     }
 
+                    val rating = if (locationRating > 0) locationRating else 4.5
+                    val reviewCountStr = if (locationReviewCount > 0) "$locationReviewCount" else "New"
+
                     val storeData = StoreData(
                         restaurant_id = restaurantId,
                         brand_info = StoreBrandInfo(
                             name = brandName,
                             logo_url = logoUrl,
                             banner_image_url = effectiveBanner,
-                            rating = 4.5,
-                            review_count = "100+",
+                            rating = rating,
+                            review_count = reviewCountStr,
                             cuisine = brandType.replaceFirstChar { it.uppercase() },
                             tags = tags.ifEmpty { listOf(brandType.replaceFirstChar { it.uppercase() }) }
                         ),
@@ -574,7 +585,8 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                             longitude = storeLng,
                             delivery_enabled = deliveryEnabled,
                             pickup_enabled = pickupEnabled,
-                            delivery_radius = deliveryRadius
+                            delivery_radius = deliveryRadius,
+                            location_id = locationId
                         ),
                         menu = menuCategories.ifEmpty {
                             listOf(StoreMenuCategory(
@@ -812,7 +824,8 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                             phone = null,
                             operating_hours = null,
                             latitude = 0.0,
-                            longitude = 0.0
+                            longitude = 0.0,
+                            location_id = ""
                         ),
                         menu = menuCategories.ifEmpty {
                             listOf(StoreMenuCategory(
@@ -911,7 +924,8 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                     phone = null,
                     operating_hours = null,
                     latitude = 0.0,
-                    longitude = 0.0
+                    longitude = 0.0,
+                    location_id = ""
                 ),
                 menu = menuCategories
             )
@@ -960,6 +974,7 @@ private fun generateFallbackStoreData(storeId: String, storeName: String): Store
             delivery_time_est = "15-25 min",
             address = "",
             phone = null,
+            location_id = "",
             operating_hours = mapOf(
                 "Mon" to "6:00 AM - 11:00 PM",
                 "Tue" to "6:00 AM - 11:00 PM",
@@ -1086,6 +1101,99 @@ private fun parseModifierGroups(arr: JSONArray): List<StoreModifierGroup> {
                 )
             }
         )
+    }
+}
+
+// MARK: - Brand Location Rating API
+
+suspend fun submitRating(locationId: String, rating: Int, text: String?): Boolean = withContext(Dispatchers.IO) {
+    try {
+        val url = java.net.URL("${Config.API_BASE_URL}/brand-locations/$locationId/reviews")
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json")
+        AuthManager.getToken()?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
+        conn.connectTimeout = 10000
+        conn.readTimeout = 10000
+        conn.doOutput = true
+        val body = JSONObject()
+        body.put("rating", rating)
+        if (!text.isNullOrEmpty()) body.put("text", text)
+        conn.outputStream.write(body.toString().toByteArray())
+        val success = conn.responseCode == 200 || conn.responseCode == 201
+        Log.d("StoreApi", "📱 [Rating] POST /reviews — HTTP ${conn.responseCode} success=$success")
+        conn.disconnect()
+        return@withContext success
+    } catch (e: Exception) {
+        Log.w("StoreApi", "📱 [Rating] POST error: ${e.message}")
+        return@withContext false
+    }
+}
+
+suspend fun fetchMyRating(locationId: String): JSONObject? = withContext(Dispatchers.IO) {
+    try {
+        val url = java.net.URL("${Config.API_BASE_URL}/brand-locations/$locationId/reviews/mine")
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.setRequestProperty("Content-Type", "application/json")
+        AuthManager.getToken()?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
+        conn.connectTimeout = 10000
+        conn.readTimeout = 10000
+        val responseCode = conn.responseCode
+        Log.d("StoreApi", "📱 [Rating] GET /mine — HTTP $responseCode")
+        if (responseCode == 200) {
+            val json = JSONObject(conn.inputStream.bufferedReader().readText())
+            conn.disconnect()
+            return@withContext json.optJSONObject("review")
+        }
+        conn.disconnect()
+        return@withContext null
+    } catch (e: Exception) {
+        Log.w("StoreApi", "📱 [Rating] GET /mine error: ${e.message}")
+        return@withContext null
+    }
+}
+
+suspend fun updateRating(locationId: String, reviewId: String, rating: Int, text: String?): Boolean = withContext(Dispatchers.IO) {
+    try {
+        val url = java.net.URL("${Config.API_BASE_URL}/brand-locations/$locationId/reviews/$reviewId")
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "PUT"
+        conn.setRequestProperty("Content-Type", "application/json")
+        AuthManager.getToken()?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
+        conn.connectTimeout = 10000
+        conn.readTimeout = 10000
+        conn.doOutput = true
+        val body = JSONObject()
+        body.put("rating", rating)
+        if (!text.isNullOrEmpty()) body.put("text", text)
+        conn.outputStream.write(body.toString().toByteArray())
+        val success = conn.responseCode == 200
+        Log.d("StoreApi", "📱 [Rating] PUT /reviews — HTTP ${conn.responseCode} success=$success")
+        conn.disconnect()
+        return@withContext success
+    } catch (e: Exception) {
+        Log.w("StoreApi", "📱 [Rating] PUT error: ${e.message}")
+        return@withContext false
+    }
+}
+
+suspend fun deleteRating(locationId: String, reviewId: String): Boolean = withContext(Dispatchers.IO) {
+    try {
+        val url = java.net.URL("${Config.API_BASE_URL}/brand-locations/$locationId/reviews/$reviewId")
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "DELETE"
+        conn.setRequestProperty("Content-Type", "application/json")
+        AuthManager.getToken()?.let { conn.setRequestProperty("Authorization", "Bearer $it") }
+        conn.connectTimeout = 10000
+        conn.readTimeout = 10000
+        val success = conn.responseCode == 200
+        Log.d("StoreApi", "📱 [Rating] DELETE /reviews — HTTP ${conn.responseCode} success=$success")
+        conn.disconnect()
+        return@withContext success
+    } catch (e: Exception) {
+        Log.w("StoreApi", "📱 [Rating] DELETE error: ${e.message}")
+        return@withContext false
     }
 }
 

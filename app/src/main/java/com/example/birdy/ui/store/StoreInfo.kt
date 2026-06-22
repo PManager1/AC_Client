@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import android.content.Intent
+import android.util.Log
 import androidx.compose.material.icons.automirrored.filled.DirectionsBike
 import androidx.core.net.toUri
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -32,13 +33,18 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -73,9 +79,33 @@ fun StoreInfo(
     onDismiss: () -> Unit
 ) {
     var isHoursExpanded by remember { mutableStateOf(false) }
+    var userRating by remember { mutableStateOf<Int?>(null) }
+    var userReviewText by remember { mutableStateOf("") }
+    var userReviewId by remember { mutableStateOf<String?>(null) }
+    var isLoadingRating by remember { mutableStateOf(true) }
+    val scope = rememberCoroutineScope()
     val daysOfWeek = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
     val today = remember {
         SimpleDateFormat("EEEE", Locale.getDefault()).format(Calendar.getInstance().time)
+    }
+
+    // Fetch user's existing rating
+    LaunchedEffect(Unit) {
+        if (data.location_info.location_id.isNotEmpty()) {
+            isLoadingRating = true
+            val review = fetchMyRating(data.location_info.location_id)
+            if (review != null) {
+                userRating = review.optInt("rating")
+                userReviewId = review.optString("id", null)
+                userReviewText = review.optString("text", "")
+                Log.d("StoreInfo", "📱 [Rating] Found existing: rating=${userRating} id=${userReviewId}")
+            } else {
+                Log.d("StoreInfo", "📱 [Rating] No existing rating")
+            }
+            isLoadingRating = false
+        } else {
+            isLoadingRating = false
+        }
     }
 
     Column(
@@ -436,11 +466,12 @@ fun StoreInfo(
                 fontWeight = FontWeight.Bold,
                 color = Color.Black
             )
+
+            // Aggregate rating display
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Stars
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     for (i in 1..5) {
                         Icon(
@@ -464,6 +495,125 @@ fun StoreInfo(
                         fontWeight = FontWeight.Normal,
                         color = Color.Gray
                     )
+                }
+            }
+
+            // User rating section
+            if (data.location_info.location_id.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(0.5.dp)
+                        .background(Color.LightGray.copy(alpha = 0.3f))
+                )
+
+                if (isLoadingRating) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Your Rating",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                            if (userReviewId != null) {
+                                Text(
+                                    text = "Remove",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    color = Color(0xFFD32F2F),
+                                                modifier = Modifier.clickable {
+                                                    scope.launch {
+                                                        val locationId = data.location_info.location_id
+                                                        userReviewId?.let { deleteRating(locationId, it) }
+                                                        userRating = null
+                                                        userReviewText = ""
+                                                        userReviewId = null
+                                                    }
+                                                }
+                                )
+                            }
+                        }
+
+                        // Tappable stars
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            for (i in 1..5) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = "Star $i",
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .clickable {
+                                            userRating = i
+                                            scope.launch {
+                                                val locationId = data.location_info.location_id
+                                                val text = userReviewText.ifEmpty { null }
+                                                if (userReviewId != null) {
+                                                    userReviewId?.let { updateRating(locationId, it, i, text) }
+                                                } else {
+                                                    submitRating(locationId, i, text)
+                                                    userReviewId = "pending"
+                                                }
+                                            }
+                                        },
+                                    tint = if (i <= (userRating ?: 0)) Color(0xFFFFA000) else Color.LightGray
+                                )
+                            }
+                        }
+
+                        // Text field + Send button (shown after first star tap)
+                        if (userReviewId != null || userRating != null) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TextField(
+                                    value = userReviewText,
+                                    onValueChange = { userReviewText = it },
+                                    placeholder = { Text("Optional review...", fontSize = 14.sp) },
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .background(Color(0xFFF2F2F7), RoundedCornerShape(12.dp)),
+                                    colors = TextFieldDefaults.colors(
+                                        unfocusedContainerColor = Color.Transparent,
+                                        focusedContainerColor = Color.Transparent
+                                    ),
+                                    singleLine = true
+                                )
+                                Text(
+                                    text = "Send",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier
+                                        .clickable(enabled = userRating != null) {
+                                            scope.launch {
+                                                val locationId = data.location_info.location_id
+                                                val r = userRating ?: data.brand_info.rating.roundToInt()
+                                                val text = userReviewText.ifEmpty { null }
+                                                if (userReviewId != null) {
+                                                    userReviewId?.let { updateRating(locationId, it, r, text) }
+                                                } else {
+                                                    submitRating(locationId, r, text)
+                                                    userReviewId = "pending"
+                                                }
+                                            }
+                                        }
+                                        .background(Color(0xFFFFA000), RoundedCornerShape(50))
+                                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

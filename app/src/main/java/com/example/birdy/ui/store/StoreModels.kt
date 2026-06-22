@@ -23,7 +23,8 @@ data class StoreLocationInfo(
     val longitude: Double = 0.0,
     val delivery_enabled: Boolean? = null,
     val pickup_enabled: Boolean? = null,
-    val delivery_radius: Double? = null
+    val delivery_radius: Double? = null,
+    val location_id: String = ""
 )
 
 data class StoreMenuCategory(

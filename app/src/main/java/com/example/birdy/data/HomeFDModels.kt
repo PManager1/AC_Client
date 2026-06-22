@@ -216,11 +216,13 @@ object HomeFDData {
     /** Blocking network call — must be called from a background thread */
     fun fetchGroceryStores(): List<GroceryStore> {
         return try {
-            val url = URL("$API_BASE_URL/brands?type=grocery")
-            val connection = url.openConnection()
+            val url = URL("$API_BASE_URL/brands?type=grocery&filterByActivePolygons=true")
+            val connection = url.openConnection() as java.net.HttpURLConnection
             connection.connectTimeout = 10_000
             connection.readTimeout = 15_000
-            val json = connection.getInputStream().bufferedReader().use { it.readText() }
+            connection.setRequestProperty("Content-Type", "application/json")
+            AuthManager.getToken()?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
+            val json = connection.inputStream.bufferedReader().use { it.readText() }
             parseGroceryStores(json)
         } catch (e: Exception) {
             println("❌ [HomeFDData] Failed to fetch /brands: ${e.message}")
