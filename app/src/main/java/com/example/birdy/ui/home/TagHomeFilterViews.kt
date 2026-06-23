@@ -133,7 +133,7 @@ fun DeliveryFeeFilterSheet(
         }
         IconButton(
             onClick = onDismiss,
-            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+            modifier = Modifier.align(Alignment.TopEnd)
         ) {
             Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.Gray)
         }
@@ -315,7 +315,7 @@ fun ScheduleFilterSheet(
         }
         IconButton(
             onClick = onDismiss,
-            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+            modifier = Modifier.align(Alignment.TopEnd)
         ) {
             Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.Gray)
         }
@@ -400,7 +400,7 @@ fun RatingsFilterSheet(
         }
         IconButton(
             onClick = onDismiss,
-            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+            modifier = Modifier.align(Alignment.TopEnd)
         ) {
             Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.Gray)
         }
@@ -473,7 +473,7 @@ fun PriceFilterSheet(
         }
         IconButton(
             onClick = onDismiss,
-            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+            modifier = Modifier.align(Alignment.TopEnd)
         ) {
             Icon(Icons.Filled.Close, contentDescription = "Close", tint = Color.Gray)
         }
