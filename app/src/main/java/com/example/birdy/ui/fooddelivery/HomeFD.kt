@@ -20,7 +20,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import com.example.birdy.data.FeedRestaurant
 import com.example.birdy.data.FeedSection
+import android.content.Context
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,6 +73,49 @@ fun HomeFDScreen(
     var selectedAddressId by remember { mutableStateOf<String?>(null) }
     var isLoadingAddress by remember { mutableStateOf(false) }
     var showAddressSheet by remember { mutableStateOf(false) }
+
+    // Network monitoring
+    val context = LocalContext.current
+    var isNetworkConnected by remember { mutableStateOf(true) }
+    var showNoInternetAlert by remember { mutableStateOf(false) }
+
+    DisposableEffect(Unit) {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+
+        // Check current state
+        val activeNetwork = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
+        isNetworkConnected = capabilities?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        if (!isNetworkConnected) showNoInternetAlert = true
+
+        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                isNetworkConnected = true
+                showNoInternetAlert = false
+            }
+
+            override fun onLost(network: android.net.Network) {
+                isNetworkConnected = false
+                showNoInternetAlert = true
+            }
+
+            override fun onCapabilitiesChanged(network: android.net.Network, capabilities: android.net.NetworkCapabilities) {
+                val connected = capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                isNetworkConnected = connected
+                if (!connected) showNoInternetAlert = true
+                else showNoInternetAlert = false
+            }
+        }
+
+        val request = android.net.NetworkRequest.Builder()
+            .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        connectivityManager.registerNetworkCallback(request, callback)
+
+        onDispose {
+            connectivityManager.unregisterNetworkCallback(callback)
+        }
+    }
 
     // Main category tab state — matches iOS selectedMainCategory
     var selectedMainCategory by remember { mutableStateOf("All") }
@@ -168,6 +216,15 @@ fun HomeFDScreen(
             groceryStores = stores
             isLoadingGroceryStores = false
             println("✅ [HomeFDScreen] Re-fetched ${stores.size} grocery stores (address changed)")
+        }
+    }
+
+    // Auto-refresh data when network connectivity returns
+    LaunchedEffect(isNetworkConnected) {
+        if (isNetworkConnected) {
+            withContext(Dispatchers.IO) {
+                homeFeed = HomeFDData.fetchHomeFeed()
+            }
         }
     }
 
@@ -368,6 +425,20 @@ fun HomeFDScreen(
                 },
                 onDismiss = {
                     showAddressSheet = false
+                }
+            )
+        }
+
+        // MARK: - No Internet Alert
+        if (showNoInternetAlert) {
+            AlertDialog(
+                onDismissRequest = { showNoInternetAlert = false },
+                title = { androidx.compose.material3.Text("No Internet Connection") },
+                text = { androidx.compose.material3.Text("Please check your internet connection and try again.") },
+                confirmButton = {
+                    Button(onClick = { showNoInternetAlert = false }) {
+                        androidx.compose.material3.Text("OK")
+                    }
                 }
             )
         }

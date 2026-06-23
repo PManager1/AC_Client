@@ -11,6 +11,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +34,10 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+
+enum class TagHomeFilterType {
+    DELIVERY_FEE, SCHEDULE, RATINGS, PRICE
+}
 
 // MARK: - Filter Chip (matches iOS FilterChip)
 
@@ -72,6 +80,25 @@ fun TagHomeScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var retryTrigger by remember { mutableStateOf(0) }
 
+    // Filter bottom sheet state
+    var activeFilterType by remember { mutableStateOf<TagHomeFilterType?>(null) }
+    var filterDeliverySpeed by remember { mutableStateOf<String?>(null) }
+    var filterScheduleSlot by remember { mutableStateOf<String?>(null) }
+    var filterMinRating by remember { mutableStateOf<Double?>(null) }
+    var filterPriceTier by remember { mutableStateOf<Int?>(null) }
+
+    fun deliveryFeeLabel() = filterDeliverySpeed ?: "Delivery Fee"
+    fun scheduleLabel() = filterScheduleSlot ?: "Schedule"
+    fun ratingsLabel(): String {
+        val r = filterMinRating
+        if (r == null || r <= 0) return "Ratings"
+        return String.format("%.1f+", r)
+    }
+    fun priceLabel(): String {
+        val t = filterPriceTier
+        return if (t != null && t in 1..3) "$".repeat(t) else "Price"
+    }
+
     LaunchedEffect(retryTrigger, selectedFilter) {
         fetchTagPlaces(tag, selectedFilter) { items, error ->
             places = items
@@ -108,26 +135,87 @@ fun TagHomeScreen(
             )
         }
 
-        // Quick Filters (horizontal scroll) — matches iOS filters
+        // Tab strip (All, Restaurant, Grocery, Retail) — matches iOS style
+        val tabTitles = listOf("All", "Restaurant", "Grocery", "Retail")
+        Row(
+            modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            tabTitles.forEach { tab ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .clickable {
+                            if (selectedFilter != tab) {
+                                selectedFilter = tab
+                                isLoading = true
+                                errorMessage = null
+                            }
+                        }
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = tab,
+                        fontSize = 16.sp,
+                        fontWeight = if (selectedFilter == tab) FontWeight.Bold else FontWeight.Normal,
+                        color = if (selectedFilter == tab) Color(0xFFD9750B) else Color.Black
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .height(3.dp)
+                            .width(if (selectedFilter == tab) 30.dp else 0.dp)
+                            .background(if (selectedFilter == tab) Color(0xFFD9750B) else Color.Transparent)
+                            .clip(RoundedCornerShape(2.dp))
+                    )
+                }
+            }
+        }
+
+        // Filter capsules row
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(horizontal = 16.dp, vertical = 4.dp)
         ) {
-            filters.forEach { filter ->
-                TagFilterChip(
-                    title = filter,
-                    isSelected = selectedFilter == filter,
-                    action = {
-                        if (selectedFilter != filter) {
-                            selectedFilter = filter
-                            isLoading = true
-                            errorMessage = null
-                        }
-                    }
-                )
-            }
+            TagFilterCapsule(
+                title = deliveryFeeLabel(),
+                icon = Icons.Filled.ShoppingCart,
+                isActive = activeFilterType == TagHomeFilterType.DELIVERY_FEE,
+                onClick = {
+                    activeFilterType = if (activeFilterType == TagHomeFilterType.DELIVERY_FEE) null
+                    else TagHomeFilterType.DELIVERY_FEE
+                }
+            )
+            TagFilterCapsule(
+                title = scheduleLabel(),
+                icon = Icons.Filled.DateRange,
+                isActive = activeFilterType == TagHomeFilterType.SCHEDULE,
+                onClick = {
+                    activeFilterType = if (activeFilterType == TagHomeFilterType.SCHEDULE) null
+                    else TagHomeFilterType.SCHEDULE
+                }
+            )
+            TagFilterCapsule(
+                title = ratingsLabel(),
+                icon = Icons.Filled.Star,
+                isActive = activeFilterType == TagHomeFilterType.RATINGS,
+                onClick = {
+                    activeFilterType = if (activeFilterType == TagHomeFilterType.RATINGS) null
+                    else TagHomeFilterType.RATINGS
+                }
+            )
+            TagFilterCapsule(
+                title = priceLabel(),
+                icon = Icons.Filled.AttachMoney,
+                isActive = activeFilterType == TagHomeFilterType.PRICE,
+                onClick = {
+                    activeFilterType = if (activeFilterType == TagHomeFilterType.PRICE) null
+                    else TagHomeFilterType.PRICE
+                }
+            )
         }
 
         // Content
@@ -199,6 +287,50 @@ fun TagHomeScreen(
                 Spacer(modifier = Modifier.height(100.dp))
             }
         }
+
+        // MARK: - Filter Bottom Sheet
+        if (activeFilterType != null) {
+            ModalBottomSheet(
+                onDismissRequest = { activeFilterType = null },
+                containerColor = Color.White
+            ) {
+                when (activeFilterType) {
+                    TagHomeFilterType.DELIVERY_FEE -> DeliveryFeeFilterSheet(
+                        currentSpeed = filterDeliverySpeed,
+                        onApply = { speed ->
+                            filterDeliverySpeed = speed
+                            activeFilterType = null
+                        },
+                        onDismiss = { activeFilterType = null }
+                    )
+                    TagHomeFilterType.SCHEDULE -> ScheduleFilterSheet(
+                        currentSlot = filterScheduleSlot,
+                        onApply = { slot ->
+                            filterScheduleSlot = slot
+                            activeFilterType = null
+                        },
+                        onDismiss = { activeFilterType = null }
+                    )
+                    TagHomeFilterType.RATINGS -> RatingsFilterSheet(
+                        currentRating = filterMinRating,
+                        onApply = { rating ->
+                            filterMinRating = rating
+                            activeFilterType = null
+                        },
+                        onDismiss = { activeFilterType = null }
+                    )
+                    TagHomeFilterType.PRICE -> PriceFilterSheet(
+                        currentTier = filterPriceTier,
+                        onApply = { tier ->
+                            filterPriceTier = tier
+                            activeFilterType = null
+                        },
+                        onDismiss = { activeFilterType = null }
+                    )
+                    null -> {}
+                }
+            }
+        }
     }
 }
 
@@ -216,6 +348,8 @@ private suspend fun fetchTagPlaces(
                 urlString += "&type=restaurant"
             } else if (filter == "Grocery") {
                 urlString += "&type=grocery"
+            } else if (filter == "Retail") {
+                urlString += "&type=retail"
             }
 
             val url = URL(urlString)
