@@ -231,38 +231,58 @@ fun ScheduleFilterSheet(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Time slot list — vertical, centered
-        LazyColumn(
-            modifier = Modifier.heightIn(max = 260.dp),
-            contentPadding = PaddingValues(vertical = 4.dp)
-        ) {
-            items(filteredSlots) { slot ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (selectedSlot == slot) Color(0xFFFF9500).copy(alpha = 0.1f) else Color.White)
-                        .clickable { selectedSlot = slot }
-                        .padding(vertical = 14.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+        if (filteredSlots.isEmpty()) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "No more slots available today",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.Gray
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Please select a different day above",
+                    fontSize = 13.sp,
+                    color = Color.Gray
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 260.dp),
+                contentPadding = PaddingValues(vertical = 4.dp)
+            ) {
+                items(filteredSlots) { slot ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (selectedSlot == slot) Color(0xFFFF9500).copy(alpha = 0.1f) else Color.White)
+                            .clickable { selectedSlot = slot }
+                            .padding(vertical = 14.dp),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = slot,
-                            fontSize = 16.sp,
-                            fontWeight = if (selectedSlot == slot) FontWeight.Bold else FontWeight.Normal,
-                            color = Color.Black
-                        )
-                        if (selectedSlot == slot) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = null,
-                                tint = Color(0xFFFF9500)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = slot,
+                                fontSize = 16.sp,
+                                fontWeight = if (selectedSlot == slot) FontWeight.Bold else FontWeight.Normal,
+                                color = Color.Black
                             )
+                            if (selectedSlot == slot) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFF9500)
+                                )
+                            }
                         }
                     }
                 }
@@ -276,9 +296,9 @@ fun ScheduleFilterSheet(
             },
             modifier = Modifier.fillMaxWidth().height(48.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (selectedSlot != null) Color(0xFFFF9500) else Color.Gray
+                containerColor = if (selectedSlot != null && filteredSlots.isNotEmpty()) Color(0xFFFF9500) else Color.Gray
             ),
-            enabled = selectedSlot != null
+            enabled = selectedSlot != null && filteredSlots.isNotEmpty()
         ) {
             Text("View Results", fontWeight = FontWeight.Bold, color = Color.White)
         }
