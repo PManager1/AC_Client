@@ -48,6 +48,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
+import android.util.Log
+import org.json.JSONObject
 
 /**
  * Home FD Screen — replicates iOS HomeFD.swift
@@ -470,5 +472,63 @@ fun HomeFDScreen(
                 }
             )
         }
+
+        // MARK: - Zone Banner
+        if (DeliveryAddressManager.showZoneBanner.value) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 8.dp)
+            ) {
+                ZoneBanner(
+                    onDismiss = { DeliveryAddressManager.dismissZoneBanner() },
+                    onSubmit = { email, phone ->
+                        submitZoneInterest(context, email, phone)
+                    }
+                )
+            }
+        }
     }
+}
+
+private fun submitZoneInterest(context: android.content.Context, email: String, phone: String) {
+    val addr = com.example.birdy.data.DeliveryAddressManager.selectedAddress ?: return
+    var zipCode = com.example.birdy.data.DeliveryAddressManager.extractZip(addr.cityStateZip)
+    if (zipCode.isEmpty() && addr.latitude != 0.0 && addr.longitude != 0.0) {
+        try {
+            val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
+            val results = geocoder.getFromLocation(addr.latitude, addr.longitude, 1)
+            if (!results.isNullOrEmpty()) zipCode = results[0].postalCode ?: ""
+        } catch (e: Exception) {
+            Log.e("HomeFD", "Geocoder error: ${e.message}")
+        }
+    }
+    if (zipCode.isEmpty()) {
+        Log.w("HomeFD", "⚠️ Could not determine zip code — skipping zone interest")
+        return
+    }
+    Thread {
+        try {
+            val json = JSONObject().apply {
+                put("email", email)
+                put("phone", phone)
+                put("zipCode", zipCode)
+                put("latitude", addr.latitude)
+                put("longitude", addr.longitude)
+            }
+            val url = URL("${com.example.birdy.data.Config.API_BASE_URL}/zone-interest")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+            conn.outputStream.write(json.toString().toByteArray())
+            val code = conn.responseCode
+            val responseBody = if (code in 200..299) conn.inputStream.bufferedReader().readText()
+                              else conn.errorStream.bufferedReader().readText()
+            conn.disconnect()
+            Log.d("HomeFD", "Zone interest submitted: HTTP $code — $responseBody")
+        } catch (e: Exception) {
+            Log.e("HomeFD", "Zone interest error: ${e.message}")
+        }
+    }.start()
 }
