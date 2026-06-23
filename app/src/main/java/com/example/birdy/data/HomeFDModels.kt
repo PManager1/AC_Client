@@ -214,9 +214,13 @@ object HomeFDData {
     // MARK: - Load Brands (grocery/convenience/pharmacy) from API
 
     /** Blocking network call — must be called from a background thread */
-    fun fetchGroceryStores(): List<GroceryStore> {
+    fun fetchGroceryStores(lat: Double? = null, lng: Double? = null, maxDistance: Double? = null): List<GroceryStore> {
         return try {
-            val url = URL("$API_BASE_URL/brands?type=grocery&filterByActivePolygons=true")
+            var urlString = "$API_BASE_URL/brands?type=grocery&filterByActivePolygons=true"
+            if (lat != null && lng != null) {
+                urlString += "&lat=$lat&lng=$lng&maxDistance=${maxDistance ?: 10}"
+            }
+            val url = URL(urlString)
             val connection = url.openConnection() as java.net.HttpURLConnection
             connection.connectTimeout = 10_000
             connection.readTimeout = 15_000

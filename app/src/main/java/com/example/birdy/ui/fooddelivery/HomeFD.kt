@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.example.birdy.data.GroceryStore
 import com.example.birdy.data.HomeFDData
 import com.example.birdy.data.HomeFeedData
+import com.example.birdy.data.DeliveryAddressManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -139,11 +140,34 @@ fun HomeFDScreen(
         if (selectedMainCategory == "Grocery" && groceryStores.isEmpty()) {
             isLoadingGroceryStores = true
             val stores = withContext(Dispatchers.IO) {
-                HomeFDData.fetchGroceryStores()
+                val addr = DeliveryAddressManager.selectedAddress
+                if (addr != null && addr.latitude != 0.0 && addr.longitude != 0.0) {
+                    HomeFDData.fetchGroceryStores(lat = addr.latitude, lng = addr.longitude, maxDistance = 10.0)
+                } else {
+                    HomeFDData.fetchGroceryStores()
+                }
             }
             groceryStores = stores
             isLoadingGroceryStores = false
             println("✅ [HomeFDScreen] Loaded ${stores.size} grocery stores")
+        }
+    }
+
+    // Re-fetch grocery stores when address changes (distance filter needs fresh coordinates)
+    LaunchedEffect(selectedAddressId) {
+        if (selectedMainCategory == "Grocery" && selectedAddressId != null) {
+            isLoadingGroceryStores = true
+            val stores = withContext(Dispatchers.IO) {
+                val addr = DeliveryAddressManager.selectedAddress
+                if (addr != null && addr.latitude != 0.0 && addr.longitude != 0.0) {
+                    HomeFDData.fetchGroceryStores(lat = addr.latitude, lng = addr.longitude, maxDistance = 10.0)
+                } else {
+                    HomeFDData.fetchGroceryStores()
+                }
+            }
+            groceryStores = stores
+            isLoadingGroceryStores = false
+            println("✅ [HomeFDScreen] Re-fetched ${stores.size} grocery stores (address changed)")
         }
     }
 
