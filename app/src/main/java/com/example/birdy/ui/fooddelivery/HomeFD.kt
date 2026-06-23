@@ -41,6 +41,7 @@ import com.example.birdy.data.GroceryStore
 import com.example.birdy.data.HomeFDData
 import com.example.birdy.data.HomeFeedData
 import com.example.birdy.data.DeliveryAddressManager
+import com.example.birdy.data.AddressService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
@@ -181,6 +182,33 @@ fun HomeFDScreen(
         } else {
             println("⚠️ [HomeFDScreen] Home feed is null — API fetch may have failed")
         }
+    }
+
+    // Load default address on startup (matches iOS loadDefaultAddress)
+    LaunchedEffect(Unit) {
+        isLoadingAddress = true
+        val token = com.example.birdy.data.AuthManager.getToken()
+        if (token != null) {
+            val addresses = withContext(Dispatchers.IO) {
+                AddressService.getAddresses(token)
+            }
+            val defaultAddr = addresses.firstOrNull { it.isDefault } ?: addresses.firstOrNull()
+            if (defaultAddr != null) {
+                DeliveryAddressManager.selectAddress(defaultAddr)
+                selectedAddress = defaultAddr.street
+                selectedAddressId = defaultAddr.id
+                // Force re-fetch of grocery stores with distance filter
+                if (selectedMainCategory == "Grocery") {
+                    groceryStores = emptyList()
+                }
+                println("✅ [HomeFDScreen] Loaded default address: ${defaultAddr.street}")
+            } else {
+                println("⚠️ [HomeFDScreen] No addresses found")
+            }
+        } else {
+            println("⚠️ [HomeFDScreen] No auth token, skipping address load")
+        }
+        isLoadingAddress = false
     }
 
     // Fetch grocery stores when Grocery tab is selected (matches iOS: onChange of selectedMainCategory)
