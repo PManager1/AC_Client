@@ -91,8 +91,8 @@ import com.example.birdy.data.AuthManager
 import com.example.birdy.data.CartItem
 import com.example.birdy.data.Config
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import com.example.birdy.data.CartManager
@@ -129,28 +129,37 @@ fun StoreScreen(
     var isFavorited by remember { mutableStateOf(false) }
     var favoriteRestaurantIds by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    // Load data: two-phase — quick brand fetch dismisses skeleton, then full fetch loads menu
+    // Load data: three-phase — quick brand → full menu (no GPS) → location (GPS background)
     val context = LocalContext.current
     LaunchedEffect(restaurantId) {
         isLoading = true
         loadError = false
         try {
             if (restaurantId.isNotEmpty()) {
-                // Phase 1: Quick brand fetch (banner + name only)
+                // Phase 1: Quick brand fetch (banner + name only) — dismisses skeleton
                 val quickData = fetchBrandQuick(restaurantId)
                 if (quickData != null) {
                     storeData = quickData
                     CartManager.restaurantId = restaurantId
                     CartManager.restaurantName = quickData.brand_info.name
                 }
-                // Phase 2: Full fetch (menu + location + delivery info)
-                val fullData = fetchStoreDetail(restaurantId, storeName = storeName, context = context)
-                if (fullData != null) {
-                    storeData = fullData
+
+                // Phase 2: Full menu + brand info (no GPS, fast via /brands/{id} + /menu)
+                val fastData = fetchBrandWithMenu(restaurantId)
+                if (fastData != null) {
+                    storeData = fastData
                     CartManager.restaurantId = restaurantId
-                    CartManager.restaurantName = fullData.brand_info.name
+                    CartManager.restaurantName = fastData.brand_info.name
                 } else if (quickData == null) {
                     loadError = true
+                }
+
+                // Phase 3: Background location fetch (GPS + nearest-store)
+                scope.launch(Dispatchers.IO) {
+                    val location = fetchStoreLocation(restaurantId, context)
+                    withContext(Dispatchers.Main) {
+                        storeData = storeData?.copy(location_info = location)
+                    }
                 }
             } else if (jsonInputStream != null) {
                 storeData = loadStoreData(jsonInputStream)
@@ -194,7 +203,7 @@ fun StoreScreen(
     }
 
     fun toggleFavorite(restaurantId: String, nowFavorited: Boolean, context: android.content.Context) {
-        GlobalScope.launch(Dispatchers.IO) {
+        scope.launch(Dispatchers.IO) {
             try {
                 val token = AuthManager.getToken(context) ?: return@launch
                 val url = if (nowFavorited) {

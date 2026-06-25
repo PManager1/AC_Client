@@ -952,6 +952,245 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
     }
 }
 
+// MARK: - Fast store load (brand info + menu, no GPS)
+
+suspend fun fetchBrandWithMenu(restaurantId: String): StoreData? {
+    return withContext(Dispatchers.IO) {
+        try {
+            val brandUrl = "${Config.API_BASE_URL}/brands/$restaurantId"
+            val brandConn = java.net.URL(brandUrl).openConnection() as java.net.HttpURLConnection
+            brandConn.requestMethod = "GET"
+            brandConn.connectTimeout = 10000
+            brandConn.readTimeout = 10000
+            if (brandConn.responseCode != 200) {
+                brandConn.disconnect()
+                return@withContext null
+            }
+            val brandJson = JSONObject(brandConn.inputStream.bufferedReader().readText())
+            brandConn.disconnect()
+
+            val brandName = brandJson.optString("name", "")
+            val brandType = brandJson.optString("brandType", "")
+            val logoUrl = brandJson.optString("logoUrl", "")
+            val bannerUrl = brandJson.optString("bannerUrl", "")
+            val carouselArr = brandJson.optJSONArray("carouselImages")
+            val carouselImages = if (carouselArr != null) {
+                (0 until carouselArr.length()).mapNotNull { carouselArr.optString(it).takeIf { s -> s.isNotEmpty() } }
+            } else emptyList<String>()
+            val tagsArr = brandJson.optJSONArray("tags")
+            val tags = if (tagsArr != null) (0 until tagsArr.length()).map { tagsArr.getString(it) } else emptyList<String>()
+            val effectiveBanner = bannerUrl.ifEmpty { carouselImages.firstOrNull() ?: "" }
+
+            val menuCategories = mutableListOf<StoreMenuCategory>()
+
+            try {
+                val menuUrl = "${Config.API_BASE_URL}/brands/$restaurantId/menu"
+                val menuConn = java.net.URL(menuUrl).openConnection() as java.net.HttpURLConnection
+                menuConn.requestMethod = "GET"
+                menuConn.connectTimeout = 10000
+                menuConn.readTimeout = 10000
+                if (menuConn.responseCode == 200) {
+                    val menuJson = JSONObject(menuConn.inputStream.bufferedReader().readText())
+                    val categoriesArr = menuJson.optJSONArray("categories")
+                    val itemsArr = menuJson.optJSONArray("items")
+                    val modGroupsArr = menuJson.optJSONArray("modifierGroups")
+
+                    val modGroupMap = HashMap<String, StoreModifierGroup>()
+                    if (modGroupsArr != null) {
+                        for (mg in 0 until modGroupsArr.length()) {
+                            val mgObj = modGroupsArr.getJSONObject(mg)
+                            val optsArr = mgObj.optJSONArray("options") ?: JSONArray()
+                            modGroupMap[mgObj.optString("id", "")] = StoreModifierGroup(
+                                id = mgObj.optString("id", ""),
+                                name = mgObj.optString("name", ""),
+                                min_selection = mgObj.optInt("minSelect", 0),
+                                max_selection = mgObj.optInt("maxSelect", 1),
+                                is_required = mgObj.optBoolean("required", false),
+                                options = (0 until optsArr.length()).map { oi ->
+                                    val oObj = optsArr.getJSONObject(oi)
+                                    StoreModifierOption(
+                                        id = oObj.optString("id", ""),
+                                        name = oObj.optString("name", ""),
+                                        extra_price = oObj.optDouble("price", 0.0),
+                                        is_default = false
+                                    )
+                                }
+                            )
+                        }
+                    }
+
+                    val allItems = mutableListOf<Pair<StoreMenuItem, List<String>>>()
+                    if (itemsArr != null) {
+                        for (ii in 0 until itemsArr.length()) {
+                            val iObj = itemsArr.getJSONObject(ii)
+                            val catIdsArr = iObj.optJSONArray("categoryIds")
+                            val catIds = if (catIdsArr != null) {
+                                (0 until catIdsArr.length()).map { catIdsArr.getString(it) }
+                            } else emptyList<String>()
+
+                            val itemModGroupIds = iObj.optJSONArray("modifierGroupIds")
+                            val itemModGroups = mutableListOf<StoreModifierGroup>()
+                            if (itemModGroupIds != null) {
+                                for (gi in 0 until itemModGroupIds.length()) {
+                                    modGroupMap[itemModGroupIds.getString(gi)]?.let { itemModGroups.add(it) }
+                                }
+                            }
+
+                            val resolvedImg = fallbackImageUrl(resolveImageUrl(iObj), logoUrl, effectiveBanner)
+                            allItems.add(
+                                StoreMenuItem(
+                                    id = iObj.optString("id", ""),
+                                    name = iObj.optString("name", ""),
+                                    description = iObj.optString("description", ""),
+                                    price = iObj.optDouble("basePrice", 0.0),
+                                    image_url = resolvedImg,
+                                    is_available = iObj.optBoolean("isAvailable", true),
+                                    modifier_groups = itemModGroups
+                                ) to catIds
+                            )
+                        }
+                    }
+
+                    val categoryMap = linkedMapOf<String, Pair<String, MutableList<StoreMenuItem>>>()
+                    if (categoriesArr != null) {
+                        for (ci in 0 until categoriesArr.length()) {
+                            val cObj = categoriesArr.getJSONObject(ci)
+                            val catId = cObj.optString("id", "")
+                            val catName = cObj.optString("name", "")
+                            if (cObj.optBoolean("isActive", true)) {
+                                categoryMap[catId] = (catName to mutableListOf())
+                            }
+                        }
+                    }
+
+                    for ((item, catIds) in allItems) {
+                        if (catIds.isEmpty()) {
+                            if (categoryMap.isEmpty()) {
+                                categoryMap["_default"] = "Menu" to mutableListOf()
+                            }
+                            categoryMap.values.first().second.add(item)
+                        } else {
+                            for (cid in catIds) {
+                                categoryMap[cid]?.second?.add(item)
+                            }
+                        }
+                    }
+
+                    for ((catId, pair) in categoryMap) {
+                        if (pair.second.isNotEmpty()) {
+                            menuCategories.add(StoreMenuCategory(category_name = pair.first, items = pair.second))
+                        }
+                    }
+                }
+                menuConn.disconnect()
+            } catch (e: Exception) {
+                Log.w("StoreApi", "⚠️ Menu fetch failed in fast path: ${e.message}")
+            }
+
+            return@withContext StoreData(
+                restaurant_id = restaurantId,
+                brand_info = StoreBrandInfo(
+                    name = brandName,
+                    logo_url = logoUrl,
+                    banner_image_url = effectiveBanner,
+                    rating = 4.5,
+                    review_count = "100+",
+                    cuisine = brandType.replaceFirstChar { it.uppercase() },
+                    tags = tags.ifEmpty { listOf(brandType.replaceFirstChar { it.uppercase() }) }
+                ),
+                location_info = StoreLocationInfo(
+                    distance = "", delivery_fee = 0.0, delivery_time_est = "20-35 min",
+                    address = "", phone = null, operating_hours = null,
+                    latitude = 0.0, longitude = 0.0, location_id = ""
+                ),
+                menu = menuCategories
+            )
+        } catch (e: Exception) {
+            Log.w("StoreApi", "⚠️ fetchBrandWithMenu failed: ${e.message}")
+            null
+        }
+    }
+}
+
+// MARK: - Background location fetch (GPS + nearest-store)
+
+suspend fun fetchStoreLocation(restaurantId: String, context: Context): StoreLocationInfo {
+    return withContext(Dispatchers.IO) {
+        var lat = LocationManager.latitude
+        var lng = LocationManager.longitude
+
+        try {
+            val coords = LocationManager.fetchLocation(context)
+            lat = coords.first
+            lng = coords.second
+        } catch (e: Exception) {
+            Log.w("StoreApi", "⚠️ GPS fetch failed in background: ${e.message}")
+        }
+
+        var distance = ""
+        var address = ""
+        var phone: String? = null
+        var deliveryFee = 0.0
+        var deliveryTimeEst = "20-35 min"
+        var operatingHours: Map<String, String>? = null
+        var storeLat = 0.0
+        var storeLng = 0.0
+        var deliveryEnabled: Boolean? = null
+        var pickupEnabled: Boolean? = null
+        var deliveryRadius: Double? = null
+        var locationId = ""
+
+        try {
+            val nearestUrl = "${Config.API_BASE_URL}/brands/$restaurantId/nearest-store?lat=$lat&lng=$lng"
+            val conn = java.net.URL(nearestUrl).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 10000
+            conn.readTimeout = 10000
+            if (conn.responseCode == 200) {
+                val root = JSONObject(conn.inputStream.bufferedReader().readText())
+                val storeObj = root.optJSONObject("nearestStore")
+                if (storeObj != null) {
+                    val dist = storeObj.optDouble("distance", 0.0)
+                    distance = if (dist > 0) "${String.format("%.1f", dist)} mi" else ""
+                    val addrParts = mutableListOf<String>()
+                    val rawAddr = storeObj.optString("address", "")
+                    val rawCity = storeObj.optString("city", "")
+                    val rawState = storeObj.optString("state", "")
+                    val rawZipCode = storeObj.optString("zipCode", "")
+                    if (rawAddr.isNotEmpty()) addrParts.add(rawAddr)
+                    if (rawCity.isNotEmpty() && !rawAddr.contains(rawCity)) addrParts.add(rawCity)
+                    if (rawState.isNotEmpty() && !rawAddr.contains(rawState)) {
+                        addrParts.add(if (rawZipCode.isNotEmpty() && !rawAddr.contains(rawZipCode)) "$rawState $rawZipCode" else rawState)
+                    } else if (rawZipCode.isNotEmpty() && !rawAddr.contains(rawZipCode)) {
+                        addrParts.add(rawZipCode)
+                    }
+                    address = addrParts.joinToString(", ")
+                    phone = storeObj.optString("phone", "").takeIf { it.isNotEmpty() }
+                    deliveryTimeEst = storeObj.optString("deliveryTimeEst", "20-35 min")
+                    deliveryFee = storeObj.optDouble("deliveryFee", 0.0)
+                    storeLat = storeObj.optDouble("latitude", 0.0)
+                    storeLng = storeObj.optDouble("longitude", 0.0)
+                    deliveryEnabled = if (storeObj.has("deliveryEnabled")) storeObj.optBoolean("deliveryEnabled", false) else null
+                    pickupEnabled = if (storeObj.has("pickupEnabled")) storeObj.optBoolean("pickupEnabled", false) else null
+                    deliveryRadius = if (storeObj.has("deliveryRadius")) storeObj.optDouble("deliveryRadius", 0.0) else null
+                    locationId = storeObj.optString("id", "")
+                }
+            }
+            conn.disconnect()
+        } catch (e: Exception) {
+            Log.w("StoreApi", "⚠️ nearest-store fetch failed in background: ${e.message}")
+        }
+
+        StoreLocationInfo(
+            distance = distance, delivery_fee = deliveryFee, delivery_time_est = deliveryTimeEst,
+            address = address, phone = phone, operating_hours = operatingHours,
+            latitude = storeLat, longitude = storeLng,
+            delivery_enabled = deliveryEnabled, pickup_enabled = pickupEnabled,
+            delivery_radius = deliveryRadius, location_id = locationId
+        )
+    }
+}
+
 /**
  * Generate fallback StoreData for stores that don't have mock data or API endpoints.
  * Used primarily for grocery stores like 7-Eleven, Target, etc.
