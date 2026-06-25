@@ -817,21 +817,22 @@ fun StoreScreen(
             ) {
                 Spacer(modifier = Modifier.height(40.dp))
 
-                Row(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Text(
                         text = data.brand_info.name,
                         fontSize = 20.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = Color.Black
+                        color = Color.Black,
+                        modifier = Modifier.align(Alignment.Center)
                     )
-                    Spacer(modifier = Modifier.weight(1f))
-                    IconButton(onClick = { onSearchClick?.invoke() }) {
+                    IconButton(
+                        onClick = { onSearchClick?.invoke() },
+                        modifier = Modifier.align(Alignment.CenterEnd)
+                    ) {
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search",
