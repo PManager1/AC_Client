@@ -4,6 +4,11 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -61,8 +66,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,6 +80,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -108,7 +118,14 @@ fun StoreScreen(
     var selectedItem by remember { mutableStateOf<StoreMenuItem?>(null) }
     var showRestaurantInfo by remember { mutableStateOf(false) }
     var showAislesSheet by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf<String?>(null) }
+    var activeCategory by remember { mutableStateOf<String?>(null) }
+    val scrollState = rememberScrollState()
+    var anchorInitialY by remember { mutableStateOf(Float.MAX_VALUE) }
+    val categoryHeaderPositions = remember { mutableStateMapOf<String, Float>() }
+    val showPinnedHeader by remember {
+        derivedStateOf { scrollState.value >= anchorInitialY.toInt() }
+    }
+    val scope = rememberCoroutineScope()
     var isFavorited by remember { mutableStateOf(false) }
     var favoriteRestaurantIds by remember { mutableStateOf<List<String>>(emptyList()) }
 
@@ -430,7 +447,7 @@ fun StoreScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.White)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
         ) {
             // 1. BANNER with header buttons
             Box(
@@ -709,67 +726,35 @@ fun StoreScreen(
 
                 Spacer(modifier = Modifier.height(30.dp))
 
-                // 4b. CATEGORY STRIP (horizontal scroll with menu icon) — matches iOS
-                if (data.menu.size > 1) {
-                    Row(
-                        modifier = Modifier
-                            .horizontalScroll(rememberScrollState())
-                            .padding(bottom = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Menu icon — opens aisles overlay
-                        Box(
-                            modifier = Modifier
-                                .background(Color(0xFFF57C00).copy(alpha = 0.1f), RoundedCornerShape(50))
-                                .clickable { showAislesSheet = true }
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Menu,
-                                contentDescription = "All Aisles",
-                                tint = Color(0xFFF57C00),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                        // "All" pill
-                        CategoryPill(
-                            title = "All",
-                            count = data.menu.sumOf { it.items.size },
-                            isSelected = selectedCategory == null
-                        ) {
-                            selectedCategory = null
-                        }
-                        // Category pills
-                        data.menu.forEach { cat ->
-                            CategoryPill(
-                                title = cat.category_name,
-                                count = cat.items.size,
-                                isSelected = selectedCategory == cat.category_name
-                            ) {
-                                selectedCategory = cat.category_name
+                // 5. MENU CATEGORIES
+                // Anchor marker for pinned header visibility
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .onGloballyPositioned { coords ->
+                            if (anchorInitialY == Float.MAX_VALUE) {
+                                anchorInitialY = coords.positionInRoot().y
                             }
                         }
-                    }
-                }
+                )
 
-                // 5. MENU CATEGORIES
-                val filteredMenu = if (selectedCategory != null) {
-                    data.menu.filter { it.category_name == selectedCategory }
-                } else {
-                    data.menu
-                }
-                filteredMenu.forEachIndexed { index, category ->
+                data.menu.forEachIndexed { index, category ->
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Text(
                             text = category.category_name,
                             fontSize = 20.sp,
                             fontWeight = FontWeight.ExtraBold,
                             color = Color.Black,
-                            modifier = Modifier.padding(
-                                top = if (index == 0) 0.dp else 30.dp,
-                                bottom = 16.dp
-                            )
+                            modifier = Modifier
+                                .padding(
+                                    top = if (index == 0) 0.dp else 30.dp,
+                                    bottom = 16.dp
+                                )
+                                .onGloballyPositioned { coords ->
+                                    categoryHeaderPositions[category.category_name] =
+                                        coords.positionInRoot().y + scrollState.value
+                                }
                         )
                         Row(
                             modifier = Modifier
@@ -794,7 +779,79 @@ fun StoreScreen(
             }
         }
 
-        // 6. FLOATING CART BAR
+        // Active category tracking based on scroll position
+        LaunchedEffect(scrollState.value, categoryHeaderPositions.size, storeData) {
+            if (categoryHeaderPositions.isEmpty() || data.menu.isEmpty()) return@LaunchedEffect
+            var best = data.menu.first().category_name
+            var bestY = Float.MAX_VALUE
+            for (cat in data.menu) {
+                val contentY = categoryHeaderPositions[cat.category_name] ?: continue
+                val currentY = contentY - scrollState.value
+                if (currentY >= 0 && currentY < bestY) {
+                    bestY = currentY
+                    best = cat.category_name
+                }
+            }
+            activeCategory = best
+        }
+
+        // 6. PINNED HEADER — appears on scroll past anchor, matches iOS
+        AnimatedVisibility(
+            visible = showPinnedHeader,
+            enter = slideInVertically { -it } + fadeIn(animationSpec = tween(300)),
+            exit = slideOutVertically { -it } + fadeOut(animationSpec = tween(300))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White)
+            ) {
+                Spacer(modifier = Modifier.height(40.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = data.brand_info.name,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.Black
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    IconButton(onClick = { onSearchClick?.invoke() }) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search",
+                            tint = Color.Gray
+                        )
+                    }
+                }
+
+                PinnedCategoryStrip(
+                    menu = data.menu,
+                    activeCategory = activeCategory,
+                    onCategoryClick = { catName ->
+                        val targetY = categoryHeaderPositions[catName]
+                        if (targetY != null) {
+                            scope.launch {
+                                scrollState.animateScrollTo(
+                                    targetY.toInt().coerceAtLeast(0)
+                                )
+                            }
+                        }
+                    },
+                    onAislesClick = { showAislesSheet = true }
+                )
+
+                HorizontalDivider(color = Color.Gray.copy(alpha = 0.2f))
+            }
+        }
+
+        // 7. FLOATING CART BAR (matches iOS floating cart bar)
         if (CartManager.items.isNotEmpty()) {
             Column(
                 modifier = Modifier.fillMaxSize(),
@@ -865,7 +922,7 @@ fun StoreScreen(
         }
     }
 
-    // 7. RESTAURANT INFO SHEET
+    // 8. RESTAURANT INFO SHEET
     if (showRestaurantInfo) {
         StoreInfo(
             data = data,
@@ -873,7 +930,7 @@ fun StoreScreen(
         )
     }
 
-    // 7b. AISLE CATEGORIES OVERLAY (matches iOS AisleCategories)
+    // 8b. AISLE CATEGORIES OVERLAY (matches iOS AisleCategories)
     if (showAislesSheet) {
         AisleCategoriesOverlay(
             menu = data.menu,
@@ -881,7 +938,7 @@ fun StoreScreen(
         )
     }
 
-    // 8. ITEM DETAIL SHEET (matches iOS ItemDetailSheet)
+    // 9. ITEM DETAIL SHEET (matches iOS ItemDetailSheet)
     selectedItem?.let { item ->
         ItemDetailSheet(
             item = item,
@@ -1093,5 +1150,74 @@ fun ShimmerBox(modifier: Modifier = Modifier) {
                 )
             )
     )
+}
+
+// MARK: - Pinned Category Strip (matches iOS storeCategoryStrip)
+@Composable
+private fun PinnedCategoryStrip(
+    menu: List<StoreMenuCategory>,
+    activeCategory: String?,
+    onCategoryClick: (String) -> Unit,
+    onAislesClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .background(Color.White),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onAislesClick) {
+            Icon(
+                imageVector = Icons.Default.Menu,
+                contentDescription = "All Aisles",
+                tint = Color.Black
+            )
+        }
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.Bottom
+        ) {
+            menu.forEach { cat ->
+                CategoryTabButton(
+                    title = cat.category_name,
+                    isSelected = activeCategory == cat.category_name,
+                    onClick = { onCategoryClick(cat.category_name) }
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Category Tab Button (matches iOS CategoryTabButton — underline style)
+@Composable
+private fun CategoryTabButton(
+    title: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp)
+    ) {
+        Spacer(modifier = Modifier.weight(1f))
+        Text(
+            text = title,
+            fontSize = 15.sp,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) Color.Black else Color.Gray
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .background(if (isSelected) Color.Black else Color.Transparent)
+        )
+    }
 }
 
