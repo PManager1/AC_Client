@@ -120,10 +120,16 @@ fun StoreScreen(
     var showAislesSheet by remember { mutableStateOf(false) }
     var activeCategory by remember { mutableStateOf<String?>(null) }
     val scrollState = rememberScrollState()
-    var anchorInitialY by remember { mutableStateOf(Float.MAX_VALUE) }
     val categoryHeaderPositions = remember { mutableStateMapOf<String, Float>() }
+    var pinnedHeaderHeightPx by remember { mutableStateOf(0f) }
     val showPinnedHeader by remember {
-        derivedStateOf { scrollState.value >= anchorInitialY.toInt() }
+        derivedStateOf {
+            val m = storeData?.menu
+            m != null && m.isNotEmpty() && m.first().category_name.let { firstCat ->
+                categoryHeaderPositions.containsKey(firstCat) &&
+                categoryHeaderPositions[firstCat]!! - scrollState.value <= 0
+            }
+        }
     }
     val scope = rememberCoroutineScope()
     var isFavorited by remember { mutableStateOf(false) }
@@ -736,16 +742,10 @@ fun StoreScreen(
                 Spacer(modifier = Modifier.height(30.dp))
 
                 // 5. MENU CATEGORIES
-                // Anchor marker for pinned header visibility
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(1.dp)
-                        .onGloballyPositioned { coords ->
-                            if (anchorInitialY == Float.MAX_VALUE) {
-                                anchorInitialY = coords.positionInRoot().y
-                            }
-                        }
                 )
 
                 data.menu.forEachIndexed { index, category ->
@@ -814,6 +814,9 @@ fun StoreScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color.White)
+                    .onGloballyPositioned { coords ->
+                        pinnedHeaderHeightPx = coords.size.height.toFloat()
+                    }
             ) {
                 Spacer(modifier = Modifier.height(0.dp))
 
@@ -859,7 +862,7 @@ fun StoreScreen(
                         if (targetY != null) {
                             scope.launch {
                                 scrollState.animateScrollTo(
-                                    targetY.toInt().coerceAtLeast(0)
+                                    (targetY - pinnedHeaderHeightPx).toInt().coerceAtLeast(0)
                                 )
                             }
                         }
