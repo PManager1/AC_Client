@@ -2,3 +2,6 @@
 
 
 
+> great on overlay cut the space between restaurnat name text and menu options  by  25%
+
+> Update padding/margin between restaurant name and menu items to reduce vertical spacing by 25%
