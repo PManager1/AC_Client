@@ -815,7 +815,7 @@ fun StoreScreen(
                     .fillMaxWidth()
                     .background(Color.White)
             ) {
-                Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(0.dp))
 
                 Box(
                     modifier = Modifier
