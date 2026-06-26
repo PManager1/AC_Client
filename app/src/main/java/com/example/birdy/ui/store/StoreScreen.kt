@@ -127,7 +127,7 @@ fun StoreScreen(
             val m = storeData?.menu
             m != null && m.isNotEmpty() && m.first().category_name.let { firstCat ->
                 categoryHeaderPositions.containsKey(firstCat) &&
-                categoryHeaderPositions[firstCat]!! - scrollState.value <= 0
+                categoryHeaderPositions[firstCat]!! - scrollState.value <= 500f
             }
         }
     }
