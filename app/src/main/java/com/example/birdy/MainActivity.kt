@@ -298,7 +298,6 @@ fun BirdyAppContent() {
                                     onBack = { showStore = false },
                                     onViewCart = { showCart = true },
                                     restaurantId = selectedRestaurantId,
-                                    storeName = selectedStoreName,
                                     isGrocery = selectedIsGrocery,
                                     jsonInputStream = if (selectedRestaurantId.isEmpty()) context.assets.open("storejson.json") else null
                                 )

@@ -1092,13 +1092,19 @@ suspend fun fetchBrandWithMenu(restaurantId: String): StoreData? {
             try {
                 val onlineMenu = fetchMenuOnline(restaurantId)
                 if (onlineMenu != null && onlineMenu.isNotEmpty()) {
+                    val prevCount = menuCategories.sumOf { it.items.size }
+                    Log.d("StoreApi", "✅ menuOnline overrode /menu ($prevCount items) with ${onlineMenu.size} categories, ${onlineMenu.sumOf { it.items.size }} items")
                     menuCategories.clear()
                     menuCategories.addAll(onlineMenu)
+                } else {
+                    Log.d("StoreApi", "⚠️ menuOnline returned null/empty — keeping /menu results (${menuCategories.size} categories, ${menuCategories.sumOf { it.items.size }} items)")
                 }
             } catch (e: Exception) {
                 Log.w("StoreApi", "⚠️ menuOnline fetch failed: ${e.message}")
             }
 
+            val finalTotal = menuCategories.sumOf { it.items.size }
+            Log.d("StoreApi", "✅ fetchBrandWithMenu final: ${menuCategories.size} categories, $finalTotal items for $brandName")
             return@withContext StoreData(
                 restaurant_id = restaurantId,
                 brand_info = StoreBrandInfo(
@@ -1474,19 +1480,55 @@ fun fetchMenuOnline(restaurantId: String): List<StoreMenuCategory>? {
         conn.connectTimeout = 10000
         conn.readTimeout = 10000
         if (conn.responseCode != 200) {
+            Log.d("StoreApi", "⚠️ menuOnline HTTP ${conn.responseCode} for $restaurantId")
             conn.disconnect()
             return null
         }
-        val root = JSONObject(conn.inputStream.bufferedReader().readText())
+        val raw = conn.inputStream.bufferedReader().readText()
         conn.disconnect()
 
-        val menuArr = root.optJSONArray("menu") ?: return null
+        Log.d("StoreApi", "📄 menuOnline raw (${raw.length} bytes): ${raw.take(500)}")
+
+        val root = JSONObject(raw)
+        val rootKeyList = mutableListOf<String>()
+        val rootKeyIter = root.keys()
+        while (rootKeyIter.hasNext()) rootKeyList.add(rootKeyIter.next())
+        Log.d("StoreApi", "📄 menuOnline root keys: $rootKeyList")
+
+        var menuArr: JSONArray? = root.optJSONArray("menu")
+        if (menuArr == null) menuArr = root.optJSONArray("data")
+        if (menuArr == null) menuArr = root.optJSONArray("categories")
+        if (menuArr == null) {
+            for (key in rootKeyList) {
+                val maybeArr = root.optJSONArray(key)
+                if (maybeArr != null && maybeArr.length() > 0) {
+                    val first = maybeArr.optJSONObject(0)
+                    if (first != null && (first.has("category") || first.has("name") || first.has("items"))) {
+                        menuArr = maybeArr
+                        Log.d("StoreApi", "📄 menuOnline found viable array under key \"$key\"")
+                        break
+                    }
+                }
+            }
+        }
+
+        if (menuArr == null) {
+            Log.w("StoreApi", "⚠️ menuOnline could not find a menu array in response")
+            Log.d("StoreApi", "📄 menuOnline raw full: ${raw.take(2000)}")
+            return null
+        }
+
         val categories = mutableListOf<StoreMenuCategory>()
 
         for (ci in 0 until menuArr.length()) {
             val catObj = menuArr.getJSONObject(ci)
-            val itemsArr = catObj.optJSONArray("items") ?: continue
+            val itemsArr = catObj.optJSONArray("items") ?: catObj.optJSONArray("menuItems") ?: continue
             val items = mutableListOf<StoreMenuItem>()
+
+            val catName = catObj.optString("category", "")
+                .ifEmpty { catObj.optString("name", "")
+                .ifEmpty { catObj.optString("category_name", "")
+                .ifEmpty { "Category ${ci + 1}" } } }
 
             for (ii in 0 until itemsArr.length()) {
                 val itemObj = itemsArr.getJSONObject(ii)
@@ -1504,11 +1546,17 @@ fun fetchMenuOnline(restaurantId: String): List<StoreMenuCategory>? {
 
             categories.add(
                 StoreMenuCategory(
-                    category_name = catObj.optString("category", ""),
+                    category_name = catName,
                     items = items
                 )
             )
         }
+
+        val totalItems = categories.sumOf { it.items.size }
+        for (cat in categories) {
+            Log.d("StoreApi", "📦 menuOnline category \"${cat.category_name}\": ${cat.items.size} items")
+        }
+        Log.d("StoreApi", "📦 menuOnline total: ${categories.size} categories, $totalItems items")
 
         if (categories.isEmpty()) null else categories
     } catch (e: Exception) {

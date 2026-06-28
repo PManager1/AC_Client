@@ -68,6 +68,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -88,7 +89,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.example.birdy.data.AuthManager
-import com.example.birdy.data.CartItem
 import com.example.birdy.data.Config
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -96,6 +96,7 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import com.example.birdy.data.CartManager
+import java.util.Locale
 import java.io.InputStream
 
 // MARK: - Store Screen (matches iOS StoreView)
@@ -107,7 +108,6 @@ fun StoreScreen(
     onViewRestaurantInfo: (() -> Unit)? = null,
     onSearchClick: (() -> Unit)? = null,
     restaurantId: String = "",
-    storeName: String = "",
     jsonInputStream: InputStream? = null,
     isGrocery: Boolean = false
 ) {
@@ -121,19 +121,18 @@ fun StoreScreen(
     var activeCategory by remember { mutableStateOf<String?>(null) }
     val scrollState = rememberScrollState()
     val categoryHeaderPositions = remember { mutableStateMapOf<String, Float>() }
-    var pinnedHeaderHeightPx by remember { mutableStateOf(0f) }
+    var pinnedHeaderHeightPx by remember { mutableFloatStateOf(0f) }
     val showPinnedHeader by remember {
         derivedStateOf {
             val m = storeData?.menu
-            m != null && m.isNotEmpty() && m.first().category_name.let { firstCat ->
+            !m.isNullOrEmpty() && m.first().category_name.let { firstCat ->
                 categoryHeaderPositions.containsKey(firstCat) &&
                 categoryHeaderPositions[firstCat]!! - scrollState.value <= 800f
             }
         }
     }
     val scope = rememberCoroutineScope()
-    var isFavorited by remember { mutableStateOf(false) }
-    var favoriteRestaurantIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var isFavorite by remember { mutableStateOf(false) }
 
     // Load data: three-phase — quick brand → full menu (no GPS) → location (GPS background)
     val context = LocalContext.current
@@ -176,7 +175,7 @@ fun StoreScreen(
                 }
             }
             if (storeData == null && restaurantId.isEmpty()) loadError = true
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             loadError = true
         }
         isLoading = false
@@ -197,38 +196,37 @@ fun StoreScreen(
                 val arr = org.json.JSONArray(body)
                 val ids = mutableListOf<String>()
                 for (i in 0 until arr.length()) {
-                    arr.getJSONObject(i).optString("restaurantId", "")?.let { if (it.isNotEmpty()) ids.add(it) }
+                    arr.getJSONObject(i).optString("restaurantId", "").let { if (it.isNotEmpty()) ids.add(it) }
                 }
-                favoriteRestaurantIds = ids
-                isFavorited = ids.contains(restaurantId)
+                isFavorite = ids.contains(restaurantId)
             }
             conn.disconnect()
-        } catch (e: Exception) {
-            println("❌ [Fav] GET error: ${e.message}")
+        } catch (_: Exception) {
+            println("❌ [Fav] GET error:")
         }
     }
 
-    fun toggleFavorite(restaurantId: String, nowFavorited: Boolean, context: android.content.Context) {
+    fun toggleFavorite(restaurantId: String, nowFavorite: Boolean, context: android.content.Context) {
         scope.launch(Dispatchers.IO) {
             try {
                 val token = AuthManager.getToken(context) ?: return@launch
-                val url = if (nowFavorited) {
-                    URL("${com.example.birdy.data.Config.API_BASE_URL}/favorites")
+                val url = if (nowFavorite) {
+                    URL("${Config.API_BASE_URL}/favorites")
                 } else {
-                    URL("${com.example.birdy.data.Config.API_BASE_URL}/favorites?restaurantId=$restaurantId")
+                    URL("${Config.API_BASE_URL}/favorites?restaurantId=$restaurantId")
                 }
                 val conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = if (nowFavorited) "POST" else "DELETE"
+                conn.requestMethod = if (nowFavorite) "POST" else "DELETE"
                 conn.setRequestProperty("Authorization", "Bearer $token")
                 conn.setRequestProperty("Content-Type", "application/json")
                 conn.doOutput = true
-                if (nowFavorited) {
+                if (nowFavorite) {
                     conn.outputStream.write("""{"restaurantId":"$restaurantId"}""".toByteArray())
                 }
-                println("❤️ [Fav-AC-Store] ${if (nowFavorited) "ADD" else "REMOVE"} $restaurantId → ${conn.responseCode}")
+                println("❤️ [Fav-AC-Store] ${if (nowFavorite) "ADD" else "REMOVE"} $restaurantId → ${conn.responseCode}")
                 conn.disconnect()
-            } catch (e: Exception) {
-                println("❌ [Fav-AC-Store] Error: ${e.message}")
+            } catch (_: Exception) {
+                println("❌ [Fav-AC-Store] Error")
             }
         }
     }
@@ -527,13 +525,12 @@ fun StoreScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         HeaderCircleButton(icon = Icons.Default.Search) { onSearchClick?.invoke() }
                         HeaderCircleButton(
-                            icon = if (isFavorited) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            icon = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             onClick = {
-                                val newState = !isFavorited
-                                isFavorited = newState
-                                toggleFavorite(restaurantId, newState, context)
+                                isFavorite = !isFavorite
+                                toggleFavorite(restaurantId, isFavorite, context)
                             },
-                            tint = if (isFavorited) Color.Red else Color.Black
+                            tint = if (isFavorite) Color.Red else Color.Black
                         )
                         HeaderCircleButton(icon = Icons.Default.MoreVert) { /* TODO */ }
                     }
@@ -643,7 +640,7 @@ fun StoreScreen(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = String.format("%.1f", data.brand_info.rating),
+                            text = String.format(Locale.US, "%.1f", data.brand_info.rating),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.Black
@@ -708,7 +705,7 @@ fun StoreScreen(
                     ) {
                         Text(
                             text = if (data.location_info.delivery_fee == 0.0) "Free delivery"
-                            else "$${String.format("%.2f", data.location_info.delivery_fee)} delivery fee",
+                            else "$${String.format(Locale.US, "%.2f", data.location_info.delivery_fee)} delivery fee",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFCC1111)
@@ -760,18 +757,18 @@ fun StoreScreen(
                                     top = if (index == 0) 0.dp else 30.dp,
                                     bottom = 16.dp
                                 )
-                                .onGloballyPositioned { coords ->
+                                .onGloballyPositioned { coordinates ->
                                     categoryHeaderPositions[category.category_name] =
-                                        coords.positionInRoot().y + scrollState.value
+                                        coordinates.positionInRoot().y + scrollState.value
                                 }
                         )
+                        val cardW = if (isGrocery) 172.dp else 190.dp
                         Row(
                             modifier = Modifier
                                 .horizontalScroll(rememberScrollState())
                                 .fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            val cardW = if (isGrocery) 172.dp else 190.dp
                             category.items.forEach { item ->
                                 StoreFoodCard(
                                     menuItem = item,
@@ -796,7 +793,7 @@ fun StoreScreen(
             for (cat in data.menu) {
                 val contentY = categoryHeaderPositions[cat.category_name] ?: continue
                 val currentY = contentY - scrollState.value
-                if (currentY >= 0 && currentY < bestY) {
+                if (currentY in 0f..<bestY) {
                     bestY = currentY
                     best = cat.category_name
                 }
@@ -814,8 +811,8 @@ fun StoreScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color.White)
-                    .onGloballyPositioned { coords ->
-                        pinnedHeaderHeightPx = coords.size.height.toFloat()
+                    .onGloballyPositioned { coordinates ->
+                        pinnedHeaderHeightPx = coordinates.size.height.toFloat()
                     }
             ) {
                 Spacer(modifier = Modifier.height(0.dp))
@@ -925,7 +922,7 @@ fun StoreScreen(
                             color = Color.White
                         )
                         Text(
-                            text = "$${String.format("%.2f", CartManager.total)}",
+                            text = "$${String.format(Locale.US, "%.2f", CartManager.total)}",
                             fontSize = 14.sp,
                             color = Color.White.copy(alpha = 0.8f)
                         )
@@ -1067,32 +1064,6 @@ fun AisleCategoriesOverlay(
             }
             Spacer(modifier = Modifier.height(40.dp))
         }
-    }
-}
-
-// MARK: - Category Pill (matches iOS CategoryPill)
-@Composable
-fun CategoryPill(
-    title: String,
-    count: Int,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val bgColor = if (isSelected) Color(0xFFF57C00).copy(alpha = 0.1f) else Color.Gray.copy(alpha = 0.06f)
-    val textColor = if (isSelected) Color(0xFFF57C00) else Color.Black
-    Box(
-        modifier = Modifier
-            .background(bgColor, RoundedCornerShape(50))
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = if (count > 0) "$title ($count)" else title,
-            fontSize = 13.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            color = textColor
-        )
     }
 }
 
