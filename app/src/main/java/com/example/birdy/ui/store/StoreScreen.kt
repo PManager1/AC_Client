@@ -762,21 +762,25 @@ fun StoreScreen(
                                         coordinates.positionInRoot().y + scrollState.value
                                 }
                         )
-                        val cardW = if (isGrocery) 172.dp else 190.dp
-                        Row(
-                            modifier = Modifier
-                                .horizontalScroll(rememberScrollState())
-                                .fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            category.items.forEach { item ->
-                                StoreFoodCard(
-                                    menuItem = item,
-                                    restaurantName = data.brand_info.name,
-                                    onItemTap = { selectedItem = item },
-                                    cardWidth = cardW
-                                )
+                        category.items.chunked(2).forEach { rowItems ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                rowItems.forEach { item ->
+                                    StoreFoodCard(
+                                        menuItem = item,
+                                        restaurantName = data.brand_info.name,
+                                        onItemTap = { selectedItem = item },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                                if (rowItems.size == 1) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
+                            Spacer(modifier = Modifier.height(12.dp))
                         }
                     }
                 }
