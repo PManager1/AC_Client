@@ -4,6 +4,8 @@ import android.app.Application
 import android.util.Log
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import com.example.birdy.data.LocationManager
 import com.example.birdy.ui.store.DataUriFetcher
 import okhttp3.Interceptor
@@ -13,7 +15,6 @@ class BirdyApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
-        // Initialize location provider so StoreApi can use cached GPS coords
         LocationManager.init(this)
         Log.d("BirdyApp", "✅ LocationManager initialized")
     }
@@ -21,8 +22,18 @@ class BirdyApp : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
             .components {
-                // Custom fetcher for data: URI images (base64-encoded) from the Go backend
                 add(DataUriFetcher.Factory())
+            }
+            .memoryCache {
+                MemoryCache.Builder(this)
+                    .maxSizePercent(0.25)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(50 * 1024 * 1024)
+                    .build()
             }
             .okHttpClient {
                 OkHttpClient.Builder()

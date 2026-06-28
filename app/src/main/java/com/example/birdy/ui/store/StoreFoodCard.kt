@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,12 +63,15 @@ fun StoreFoodCard(
         Log.w("StoreFoodCard", "⚠️ [${menuItem.name}] NO image URL — hiding image box")
     }
 
+    val displayWidth = (172 * LocalContext.current.resources.displayMetrics.density).toInt()
+    val optimizedUrl = optimizeImageUrl(menuItem.image_url, displayWidth)
+
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Image with add/stepper button — only show if image_url is not empty
-        if (menuItem.image_url.isNotEmpty()) {
+        if (optimizedUrl.isNotEmpty()) {
         Box(
             modifier = Modifier
                 .size(172.dp, 170.dp)
@@ -75,7 +79,7 @@ fun StoreFoodCard(
                 .clickable { onItemTap() }
         ) {
             SubcomposeAsyncImage(
-                model = menuItem.image_url,
+                model = optimizedUrl,
                 contentDescription = menuItem.name,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -259,4 +263,12 @@ fun StoreFoodCard(
             color = Color.Gray
         )
     }
+}
+
+private fun optimizeImageUrl(url: String, targetWidth: Int): String {
+    if (url.startsWith("https://imagedelivery.net/")) {
+        val separator = if (url.contains("?")) "&" else "?"
+        return "$url${separator}w=$targetWidth&format=auto"
+    }
+    return url
 }
