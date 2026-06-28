@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.InputStream
+import java.util.UUID
 
 // MARK: - Helper: Defensive image URL parsing (handles both imageUrl and image_url from Go backend)
 
@@ -1087,6 +1088,17 @@ suspend fun fetchBrandWithMenu(restaurantId: String): StoreData? {
                 Log.w("StoreApi", "⚠️ Menu fetch failed in fast path: ${e.message}")
             }
 
+            // Phase 2b: Try menuOnline endpoint — overrides /menu if data exists
+            try {
+                val onlineMenu = fetchMenuOnline(restaurantId)
+                if (onlineMenu != null && onlineMenu.isNotEmpty()) {
+                    menuCategories.clear()
+                    menuCategories.addAll(onlineMenu)
+                }
+            } catch (e: Exception) {
+                Log.w("StoreApi", "⚠️ menuOnline fetch failed: ${e.message}")
+            }
+
             return@withContext StoreData(
                 restaurant_id = restaurantId,
                 brand_info = StoreBrandInfo(
@@ -1450,6 +1462,59 @@ private fun parseOperatingHours(obj: JSONObject?): Map<String, String>? {
         map[key] = obj.getString(key)
     }
     return if (map.isEmpty()) null else map
+}
+
+// MARK: - MenuOnline (BrandMenuOnline format for BWW-style menus)
+// GET /brands/{brandId}/menuOnline → { menu: [{ category, items: [{ name, price, description, raw_image_url, available }] }] }
+fun fetchMenuOnline(restaurantId: String): List<StoreMenuCategory>? {
+    return try {
+        val url = "${Config.API_BASE_URL}/brands/$restaurantId/menuOnline"
+        val conn = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.connectTimeout = 10000
+        conn.readTimeout = 10000
+        if (conn.responseCode != 200) {
+            conn.disconnect()
+            return null
+        }
+        val root = JSONObject(conn.inputStream.bufferedReader().readText())
+        conn.disconnect()
+
+        val menuArr = root.optJSONArray("menu") ?: return null
+        val categories = mutableListOf<StoreMenuCategory>()
+
+        for (ci in 0 until menuArr.length()) {
+            val catObj = menuArr.getJSONObject(ci)
+            val itemsArr = catObj.optJSONArray("items") ?: continue
+            val items = mutableListOf<StoreMenuItem>()
+
+            for (ii in 0 until itemsArr.length()) {
+                val itemObj = itemsArr.getJSONObject(ii)
+                val item = StoreMenuItem(
+                    id = UUID.randomUUID().toString(),
+                    name = itemObj.optString("name", ""),
+                    description = itemObj.optString("description", ""),
+                    price = itemObj.optDouble("price", 0.0),
+                    image_url = itemObj.optString("raw_image_url", ""),
+                    is_available = itemObj.optBoolean("available", true),
+                    modifier_groups = emptyList()
+                )
+                items.add(item)
+            }
+
+            categories.add(
+                StoreMenuCategory(
+                    category_name = catObj.optString("category", ""),
+                    items = items
+                )
+            )
+        }
+
+        if (categories.isEmpty()) null else categories
+    } catch (e: Exception) {
+        Log.w("StoreApi", "⚠️ fetchMenuOnline error: ${e.message}")
+        null
+    }
 }
 
 // Legacy loader (backward compat)

@@ -127,6 +127,7 @@ object HomeFDData {
         MainCategory(name = "All", subcategories = listOf(
             FoodCategory("Fast Food", "🍟"),
             FoodCategory("Pizza", "🍕"),
+            FoodCategory("Wings", "🌶️"),
             FoodCategory("Burgers", "🍔"),
             FoodCategory("Chicken", "🍗"),
             FoodCategory("Desserts", "🍰"),
@@ -166,6 +167,7 @@ object HomeFDData {
         MainCategory(name = "Food", subcategories = listOf(
             FoodCategory("Fast Food", "🍟"),
             FoodCategory("Pizza", "🍕"),
+            FoodCategory("Wings", "🌶️"),
             FoodCategory("Burgers", "🍔"),
             FoodCategory("Chicken", "🍗"),
             FoodCategory("Desserts", "🍰"),
