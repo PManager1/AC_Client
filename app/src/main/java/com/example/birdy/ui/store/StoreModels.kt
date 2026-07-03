@@ -9,7 +9,10 @@ data class StoreBrandInfo(
     val rating: Double,
     val review_count: String,
     val cuisine: String,
-    val tags: List<String>
+    val tags: List<String>,
+    val checkoutIssues: Boolean = false,
+    val orderOnlineNotAvailable: Boolean = false,
+    val unlistedMessage: String? = null
 )
 
 data class StoreLocationInfo(

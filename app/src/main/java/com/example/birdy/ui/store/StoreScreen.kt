@@ -84,6 +84,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -738,6 +739,27 @@ fun StoreScreen(
 
                 Spacer(modifier = Modifier.height(30.dp))
 
+                // 4b. UNLISTED MESSAGE WARNING BANNER (shown when checkout issues or no online ordering)
+                val hasCheckoutFlags = data.brand_info.checkoutIssues || data.brand_info.orderOnlineNotAvailable
+                if (hasCheckoutFlags && !data.brand_info.unlistedMessage.isNullOrEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFFFF0F0))
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = data.brand_info.unlistedMessage,
+                            fontSize = 14.sp,
+                            color = Color(0xFFCC1111),
+                            lineHeight = 20.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
                 // 5. MENU CATEGORIES
                 Box(
                     modifier = Modifier
@@ -783,6 +805,17 @@ fun StoreScreen(
                             Spacer(modifier = Modifier.height(12.dp))
                         }
                     }
+                }
+
+                if (data.menu.isEmpty() && !hasCheckoutFlags) {
+                    Text(
+                        text = "Menu coming soon",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(if (CartManager.items.isEmpty()) 20.dp else 100.dp))

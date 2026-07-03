@@ -340,6 +340,9 @@ suspend fun fetchBrandQuick(restaurantId: String): StoreData? {
                 val effectiveBanner = bannerUrl.ifEmpty { carouselImages.firstOrNull() ?: "" }
                 val tagsArr = brandJson.optJSONArray("tags")
                 val tags = if (tagsArr != null) (0 until tagsArr.length()).map { tagsArr.getString(it) } else emptyList<String>()
+                val checkoutIssues = brandJson.optBoolean("checkoutIssues", false)
+                val orderOnlineNotAvailable = brandJson.optBoolean("orderOnlineNotAvailable", false)
+                val unlistedMessage = brandJson.optString("unlistedMessage", "").takeIf { it.isNotEmpty() }
                 conn.disconnect()
 
                 if (brandName.isNotEmpty()) {
@@ -352,7 +355,10 @@ suspend fun fetchBrandQuick(restaurantId: String): StoreData? {
                             rating = 4.5,
                             review_count = "100+",
                             cuisine = brandType.replaceFirstChar { it.uppercase() },
-                            tags = tags.ifEmpty { listOf(brandType.replaceFirstChar { it.uppercase() }) }
+                            tags = tags.ifEmpty { listOf(brandType.replaceFirstChar { it.uppercase() }) },
+                            checkoutIssues = checkoutIssues,
+                            orderOnlineNotAvailable = orderOnlineNotAvailable,
+                            unlistedMessage = unlistedMessage
                         ),
                         location_info = StoreLocationInfo(
                             distance = "", delivery_fee = 0.0, delivery_time_est = "20-35 min",
@@ -405,6 +411,62 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                 val storeObj = root.optJSONObject("nearestStore")
                 val menuObj = root.optJSONObject("menu")
 
+                val storeDistance = storeObj?.optString("distance", "") ?: ""
+                val storeFee = storeObj?.optDouble("deliveryFee", 0.0) ?: 0.0
+                val storeTimeEst = storeObj?.optString("deliveryTimeEst", "20-35 min") ?: "20-35 min"
+                val storeAddress = storeObj?.let { obj ->
+                    val parts = mutableListOf<String>()
+                    obj.optString("address", "").takeIf { it.isNotEmpty() }?.let { parts.add(it) }
+                    val city = obj.optString("city", "")
+                    val state = obj.optString("state", "")
+                    val zip = obj.optString("zipCode", "")
+                    val addrStr = parts.firstOrNull() ?: ""
+                    if (city.isNotEmpty() && !addrStr.contains(city)) parts.add(city)
+                    if (state.isNotEmpty() && !addrStr.contains(state)) {
+                        parts.add(if (zip.isNotEmpty() && !addrStr.contains(zip)) "$state $zip" else state)
+                    } else if (zip.isNotEmpty() && !addrStr.contains(zip)) {
+                        parts.add(zip)
+                    }
+                    parts.joinToString(", ")
+                } ?: ""
+                val storePhone = storeObj?.optString("phone", "").takeIf { it?.isNotEmpty() == true }
+                val storeHours = parseOperatingHours(storeObj?.optJSONObject("operating_hours"))
+                val storeLat = storeObj?.optDouble("latitude", 0.0) ?: 0.0
+                val storeLng = storeObj?.optDouble("longitude", 0.0) ?: 0.0
+                val storeDeliveryEnabled = if (storeObj?.has("deliveryEnabled") == true) storeObj.optBoolean("deliveryEnabled", false) else null
+                val storePickupEnabled = if (storeObj?.has("pickupEnabled") == true) storeObj.optBoolean("pickupEnabled", false) else null
+                val storeDeliveryRadius = if (storeObj?.has("deliveryRadius") == true) storeObj.optDouble("deliveryRadius", 0.0) else null
+                val storeLocationId = storeObj?.optString("id", "") ?: ""
+
+                val menuCategories = mutableListOf<StoreMenuCategory>()
+                if (menuObj != null) {
+                    val catArr = menuObj.optJSONArray("categories")
+                    if (catArr != null) {
+                        for (ci in 0 until catArr.length()) {
+                            val catObj = catArr.getJSONObject(ci)
+                            val itemsArr = catObj.optJSONArray("items")
+                            if (itemsArr != null) {
+                                val items = (0 until itemsArr.length()).map { ii ->
+                                    val iObj = itemsArr.getJSONObject(ii)
+                                    StoreMenuItem(
+                                        id = iObj.optString("id", ""),
+                                        name = iObj.optString("name", ""),
+                                        description = iObj.optString("description", ""),
+                                        price = iObj.optDouble("price", 0.0),
+                                        image_url = resolveImageUrl(iObj),
+                                        is_available = iObj.optBoolean("isAvailable", true),
+                                        modifier_groups = emptyList()
+                                    )
+                                }
+                                menuCategories.add(StoreMenuCategory(
+                                    category_name = catObj.optString("name", "Menu"),
+                                    items = items
+                                ))
+                            }
+                        }
+                    }
+                }
+
                 if (brandObj != null) {
                     val brandName = brandObj.optString("name", "")
                     val brandType = brandObj.optString("brandType", "")
@@ -417,195 +479,44 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                     val effectiveBanner = bannerUrl.ifEmpty { carouselImages.firstOrNull() ?: "" }
                     val tagsArr = brandObj.optJSONArray("tags")
                     val tags = if (tagsArr != null) (0 until tagsArr.length()).map { tagsArr.getString(it) } else emptyList<String>()
+                    val checkoutIssues = brandObj.optBoolean("checkoutIssues", false)
+                    val orderOnlineNotAvailable = brandObj.optBoolean("orderOnlineNotAvailable", false)
+                    val unlistedMessage = brandObj.optString("unlistedMessage", "").takeIf { it.isNotEmpty() }
 
-                    // Parse location info from nearestStore
-                    var distance = ""
-                    var address = ""
-                    var phone: String? = null
-                    var deliveryFee = 0.0
-                    var deliveryTimeEst = "20-35 min"
-                    var operatingHours: Map<String, String>? = null
-                    var storeLat = 0.0
-                    var storeLng = 0.0
-                    var deliveryEnabled: Boolean? = null
-                    var pickupEnabled: Boolean? = null
-                    var deliveryRadius: Double? = null
-                    var locationId = ""
-                    var locationRating = 0.0
-                    var locationReviewCount = 0
-
-                    if (storeObj != null) {
-                        val dist = storeObj.optDouble("distance", 0.0)
-                        distance = if (dist > 0) "${String.format("%.1f", dist)} mi" else ""
-                        // Build full address: address, city, state zipCode
-                        val addrParts = mutableListOf<String>()
-                        val rawAddr = storeObj.optString("address", "")
-                        val rawCity = storeObj.optString("city", "")
-                        val rawState = storeObj.optString("state", "")
-                        val rawZipCode = storeObj.optString("zipCode", "")
-                        if (rawAddr.isNotEmpty()) addrParts.add(rawAddr)
-                        if (rawCity.isNotEmpty() && !rawAddr.contains(rawCity)) addrParts.add(rawCity)
-                        if (rawState.isNotEmpty() && !rawAddr.contains(rawState)) {
-                            addrParts.add(if (rawZipCode.isNotEmpty() && !rawAddr.contains(rawZipCode)) "$rawState $rawZipCode" else rawState)
-                        } else if (rawZipCode.isNotEmpty() && !rawAddr.contains(rawZipCode)) {
-                            addrParts.add(rawZipCode)
-                        }
-                        address = addrParts.joinToString(", ")
-                        phone = storeObj.optString("phone", "").takeIf { it.isNotEmpty() }
-                        deliveryTimeEst = storeObj.optString("deliveryTimeEst", "20-35 min")
-                        storeLat = storeObj.optDouble("latitude", 0.0)
-                        storeLng = storeObj.optDouble("longitude", 0.0)
-                        deliveryEnabled = if (storeObj.has("deliveryEnabled")) storeObj.optBoolean("deliveryEnabled", false) else null
-                        pickupEnabled = if (storeObj.has("pickupEnabled")) storeObj.optBoolean("pickupEnabled", false) else null
-                        deliveryRadius = if (storeObj.has("deliveryRadius")) storeObj.optDouble("deliveryRadius", 0.0) else null
-                        locationId = storeObj.optString("id", "")
-                        locationRating = storeObj.optDouble("rating", 0.0)
-                        locationReviewCount = storeObj.optInt("reviewCount", 0)
-                        // Parse hours — handles both structured {monday: {open, close, closed}} and flat {Mon: "10 AM - 11 PM"}
-                        val hoursObj = storeObj.optJSONObject("hours")
-                        if (hoursObj != null) {
-                            val dayKeyMap = mapOf(
-                                "monday" to "Monday", "tuesday" to "Tuesday", "wednesday" to "Wednesday",
-                                "thursday" to "Thursday", "friday" to "Friday", "saturday" to "Saturday",
-                                "sunday" to "Sunday"
-                            )
-                            val hoursMap = mutableMapOf<String, String>()
-                            val keys = hoursObj.keys()
-                            while (keys.hasNext()) {
-                                val key = keys.next()
-                                val value = hoursObj.get(key)
-                                if (value is JSONObject) {
-                                    // Structured format: {open: "10:00", close: "23:00", closed: false}
-                                    val closed = value.optBoolean("closed", false)
-                                    if (closed) {
-                                        hoursMap[dayKeyMap[key] ?: key.replaceFirstChar { it.uppercase() }] = "Closed"
-                                    } else {
-                                        val open = value.optString("open", "")
-                                        val close = value.optString("close", "")
-                                        if (open.isNotEmpty() && close.isNotEmpty()) {
-                                            hoursMap[dayKeyMap[key] ?: key.replaceFirstChar { it.uppercase() }] = "$open - $close"
-                                        }
-                                    }
-                                } else {
-                                    // Flat string format: "10:00 AM - 11:00 PM"
-                                    hoursMap[key] = value.toString()
-                                }
-                            }
-                            operatingHours = hoursMap.ifEmpty { null }
-                        }
+                    if (brandName.isNotEmpty()) {
+                        val storeData = StoreData(
+                            restaurant_id = restaurantId,
+                            brand_info = StoreBrandInfo(
+                                name = brandName,
+                                logo_url = logoUrl,
+                                banner_image_url = effectiveBanner,
+                                rating = 4.5,
+                                review_count = "100+",
+                                cuisine = brandType.replaceFirstChar { it.uppercase() },
+                                tags = tags.ifEmpty { listOf(brandType.replaceFirstChar { it.uppercase() }) },
+                                checkoutIssues = checkoutIssues,
+                                orderOnlineNotAvailable = orderOnlineNotAvailable,
+                                unlistedMessage = unlistedMessage
+                            ),
+                            location_info = StoreLocationInfo(
+                                distance = storeDistance,
+                                delivery_fee = storeFee,
+                                delivery_time_est = storeTimeEst,
+                                address = storeAddress,
+                                phone = storePhone,
+                                operating_hours = storeHours,
+                                latitude = storeLat,
+                                longitude = storeLng,
+                                delivery_enabled = storeDeliveryEnabled,
+                                pickup_enabled = storePickupEnabled,
+                                delivery_radius = storeDeliveryRadius,
+                                location_id = storeLocationId
+                            ),
+                            menu = menuCategories
+                        )
+                        Log.d("StoreApi", "✅ Loaded from /nearest-store: $brandName, ${menuCategories.size} categories, distance=$storeDistance")
+                        return@withContext storeData
                     }
-
-                    // Parse menu categories
-                    val menuCategories = mutableListOf<StoreMenuCategory>()
-                    if (menuObj != null) {
-                        val categoriesArr = menuObj.optJSONArray("categories")
-                        val modGroupsArr = menuObj.optJSONArray("modifierGroups")
-
-                        // Parse modifier groups
-                        val modGroupMap = HashMap<String, StoreModifierGroup>()
-                        if (modGroupsArr != null) {
-                            for (mg in 0 until modGroupsArr.length()) {
-                                val mgObj = modGroupsArr.getJSONObject(mg)
-                                val optsArr = mgObj.optJSONArray("options") ?: JSONArray()
-                                modGroupMap[mgObj.optString("id", "")] = StoreModifierGroup(
-                                    id = mgObj.optString("id", ""),
-                                    name = mgObj.optString("name", ""),
-                                    min_selection = mgObj.optInt("minSelect", 0),
-                                    max_selection = mgObj.optInt("maxSelect", 1),
-                                    is_required = mgObj.optBoolean("required", false),
-                                    options = (0 until optsArr.length()).map { oi ->
-                                        val oObj = optsArr.getJSONObject(oi)
-                                        StoreModifierOption(
-                                            id = oObj.optString("id", ""),
-                                            name = oObj.optString("name", ""),
-                                            extra_price = oObj.optDouble("price", 0.0),
-                                            is_default = false
-                                        )
-                                    }
-                                )
-                            }
-                        }
-
-                        if (categoriesArr != null) {
-                            for (ci in 0 until categoriesArr.length()) {
-                                val catObj = categoriesArr.getJSONObject(ci)
-                                val catName = catObj.optString("name", "")
-                                val itemsArr = catObj.optJSONArray("items")
-                                val catItems = mutableListOf<StoreMenuItem>()
-                                if (itemsArr != null) {
-                                    for (ii in 0 until itemsArr.length()) {
-                                        val iObj = itemsArr.getJSONObject(ii)
-                                        val itemModGroupIds = iObj.optJSONArray("modifierGroupIds")
-                                        val itemModGroups = mutableListOf<StoreModifierGroup>()
-                                        if (itemModGroupIds != null) {
-                                            for (gi in 0 until itemModGroupIds.length()) {
-                                                modGroupMap[itemModGroupIds.getString(gi)]?.let { itemModGroups.add(it) }
-                                            }
-                                        }
-                                        val resolvedImg = fallbackImageUrl(resolveImageUrl(iObj), logoUrl, effectiveBanner)
-                                        catItems.add(StoreMenuItem(
-                                            id = iObj.optString("id", ""),
-                                            name = iObj.optString("name", ""),
-                                            description = iObj.optString("description", ""),
-                                            price = iObj.optDouble("basePrice", iObj.optDouble("price", 0.0)),
-                                            image_url = resolvedImg,
-                                            is_available = iObj.optBoolean("isAvailable", true),
-                                            modifier_groups = itemModGroups
-                                        ))
-                                    }
-                                }
-                                if (catItems.isNotEmpty()) {
-                                    menuCategories.add(StoreMenuCategory(category_name = catName, items = catItems))
-                                }
-                            }
-                        }
-                    }
-
-                    val rating = if (locationRating > 0) locationRating else 4.5
-                    val reviewCountStr = if (locationReviewCount > 0) "$locationReviewCount" else "New"
-
-                    val storeData = StoreData(
-                        restaurant_id = restaurantId,
-                        brand_info = StoreBrandInfo(
-                            name = brandName,
-                            logo_url = logoUrl,
-                            banner_image_url = effectiveBanner,
-                            rating = rating,
-                            review_count = reviewCountStr,
-                            cuisine = brandType.replaceFirstChar { it.uppercase() },
-                            tags = tags.ifEmpty { listOf(brandType.replaceFirstChar { it.uppercase() }) }
-                        ),
-                        location_info = StoreLocationInfo(
-                            distance = distance,
-                            delivery_fee = deliveryFee,
-                            delivery_time_est = deliveryTimeEst,
-                            address = address,
-                            phone = phone,
-                            operating_hours = operatingHours,
-                            latitude = storeLat,
-                            longitude = storeLng,
-                            delivery_enabled = deliveryEnabled,
-                            pickup_enabled = pickupEnabled,
-                            delivery_radius = deliveryRadius,
-                            location_id = locationId
-                        ),
-                        menu = menuCategories.ifEmpty {
-                            listOf(StoreMenuCategory(
-                                category_name = "Menu",
-                                items = listOf(StoreMenuItem(
-                                    id = "placeholder",
-                                    name = "Menu coming soon",
-                                    description = "This restaurant's menu is being updated",
-                                    price = 0.0,
-                                    image_url = "",
-                                    is_available = false,
-                                    modifier_groups = emptyList()
-                                ))
-                            ))
-                        }
-                    )
-                    Log.d("StoreApi", "✅ Loaded from /nearest-store: $brandName, ${menuCategories.size} categories, distance=$distance")
-                    return@withContext storeData
                 }
             }
             conn.disconnect()
@@ -634,6 +545,9 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                 } else emptyList<String>()
                 val tagsArr = brandJson.optJSONArray("tags")
                 val tags = if (tagsArr != null) (0 until tagsArr.length()).map { tagsArr.getString(it) } else emptyList<String>()
+                val checkoutIssues = brandJson.optBoolean("checkoutIssues", false)
+                val orderOnlineNotAvailable = brandJson.optBoolean("orderOnlineNotAvailable", false)
+                val unlistedMessage = brandJson.optString("unlistedMessage", "").takeIf { it.isNotEmpty() }
 
                 // Use banner, or first carousel image
                 val effectiveBanner = bannerUrl.ifEmpty { carouselImages.firstOrNull() ?: "" }
@@ -815,7 +729,10 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                             rating = 4.5,
                             review_count = "100+",
                             cuisine = brandType.replaceFirstChar { it.uppercase() },
-                            tags = tags.ifEmpty { listOf(brandType.replaceFirstChar { it.uppercase() }) }
+                            tags = tags.ifEmpty { listOf(brandType.replaceFirstChar { it.uppercase() }) },
+                            checkoutIssues = checkoutIssues,
+                            orderOnlineNotAvailable = orderOnlineNotAvailable,
+                            unlistedMessage = unlistedMessage
                         ),
                         location_info = StoreLocationInfo(
                             distance = "",
@@ -828,20 +745,7 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                             longitude = 0.0,
                             location_id = ""
                         ),
-                        menu = menuCategories.ifEmpty {
-                            listOf(StoreMenuCategory(
-                                category_name = "Menu",
-                                items = listOf(StoreMenuItem(
-                                    id = "placeholder",
-                                    name = "Menu coming soon",
-                                    description = "This restaurant's menu is being updated",
-                                    price = 0.0,
-                                    image_url = "",
-                                    is_available = false,
-                                    modifier_groups = emptyList()
-                                ))
-                            ))
-                        }
+                        menu = menuCategories
                     )
                 }
             }
@@ -915,7 +819,10 @@ suspend fun fetchStoreDetail(restaurantId: String, storeName: String = "", conte
                     rating = 4.5,
                     review_count = "Grocery",
                     cuisine = "Grocery",
-                    tags = listOf("Grocery", "Delivery")
+                    tags = listOf("Grocery", "Delivery"),
+                    checkoutIssues = false,
+                    orderOnlineNotAvailable = false,
+                    unlistedMessage = null
                 ),
                 location_info = StoreLocationInfo(
                     distance = "",
@@ -981,6 +888,9 @@ suspend fun fetchBrandWithMenu(restaurantId: String): StoreData? {
             val tagsArr = brandJson.optJSONArray("tags")
             val tags = if (tagsArr != null) (0 until tagsArr.length()).map { tagsArr.getString(it) } else emptyList<String>()
             val effectiveBanner = bannerUrl.ifEmpty { carouselImages.firstOrNull() ?: "" }
+            val checkoutIssues = brandJson.optBoolean("checkoutIssues", false)
+            val orderOnlineNotAvailable = brandJson.optBoolean("orderOnlineNotAvailable", false)
+            val unlistedMessage = brandJson.optString("unlistedMessage", "").takeIf { it.isNotEmpty() }
 
             val menuCategories = mutableListOf<StoreMenuCategory>()
 
@@ -1114,7 +1024,10 @@ suspend fun fetchBrandWithMenu(restaurantId: String): StoreData? {
                     rating = 4.5,
                     review_count = "100+",
                     cuisine = brandType.replaceFirstChar { it.uppercase() },
-                    tags = tags.ifEmpty { listOf(brandType.replaceFirstChar { it.uppercase() }) }
+                    tags = tags.ifEmpty { listOf(brandType.replaceFirstChar { it.uppercase() }) },
+                    checkoutIssues = checkoutIssues,
+                    orderOnlineNotAvailable = orderOnlineNotAvailable,
+                    unlistedMessage = unlistedMessage
                 ),
                 location_info = StoreLocationInfo(
                     distance = "", delivery_fee = 0.0, delivery_time_est = "20-35 min",
@@ -1223,7 +1136,10 @@ private fun generateFallbackStoreData(storeId: String, storeName: String): Store
             rating = 4.2,
             review_count = "100+",
             cuisine = "Grocery",
-            tags = listOf("Grocery", "Convenience", "Delivery")
+            tags = listOf("Grocery", "Convenience", "Delivery"),
+            checkoutIssues = false,
+            orderOnlineNotAvailable = false,
+            unlistedMessage = null
         ),
         location_info = StoreLocationInfo(
             distance = "0.5 mi",
@@ -1290,7 +1206,10 @@ fun parseStoreJson(root: JSONObject): StoreData {
         rating = brandObj.optDouble("rating", 0.0),
         review_count = brandObj.optString("review_count", "New"),
         cuisine = brandObj.optString("cuisine", ""),
-        tags = parseStringArray(brandObj.optJSONArray("tags"))
+        tags = parseStringArray(brandObj.optJSONArray("tags")),
+        checkoutIssues = brandObj.optBoolean("checkoutIssues", false),
+        orderOnlineNotAvailable = brandObj.optBoolean("orderOnlineNotAvailable", false),
+        unlistedMessage = brandObj.optString("unlistedMessage", "").takeIf { it.isNotEmpty() }
     )
 
     // Parse operating_hours if present
