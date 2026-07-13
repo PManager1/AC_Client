@@ -86,6 +86,13 @@ data class RecentSearchEntry(
     val count: Int
 )
 
+private data class VisitedBrand(
+    val brandId: String,
+    val brandName: String,
+    val logoUrl: String,
+    val tags: List<String>?
+)
+
 private val mockRestaurants = listOf(
     SearchRestaurant(
         id = 1,
@@ -152,6 +159,7 @@ fun SearchFoodScreen(
     var searchText by remember { mutableStateOf("") }
     var brandSuggestions by remember { mutableStateOf<List<BrandSuggestion>>(emptyList()) }
     val recentSearches = remember { mutableStateListOf<RecentSearchEntry>() }
+    var visitedBrands by remember { mutableStateOf<List<VisitedBrand>>(emptyList()) }
 
     val results = remember(searchText) {
         if (searchText.isEmpty()) {
@@ -165,6 +173,7 @@ fun SearchFoodScreen(
         val loaded = loadRecentSearches()
         recentSearches.clear()
         recentSearches.addAll(loaded)
+        visitedBrands = loadRecentlyVisitedBrands()
     }
 
     LaunchedEffect(searchText) {
@@ -212,6 +221,11 @@ fun SearchFoodScreen(
                     onSearch = {
                         val trimmed = searchText.trim()
                         if (trimmed.isNotEmpty()) {
+                            recentSearches.removeAll { it.query == trimmed }
+                            recentSearches.add(0, RecentSearchEntry(trimmed, 1))
+                            if (recentSearches.size > 10) {
+                                recentSearches.removeAt(recentSearches.size - 1)
+                            }
                             scope.launch { saveSearchQuery(trimmed) }
                         }
                     }
@@ -246,7 +260,9 @@ fun SearchFoodScreen(
         if (searchText.isEmpty()) {
             EmptyStateView(
                 recentSearches = recentSearches,
+                visitedBrands = visitedBrands,
                 onSearchClick = { searchText = it },
+                onBrandClick = { brandId -> onBrandClick(brandId) },
                 onSeeMore = onSeeMore
             )
         } else {
@@ -254,7 +270,19 @@ fun SearchFoodScreen(
                 brandSuggestions = brandSuggestions,
                 results = results,
                 onBrandClick = { brand ->
-                    scope.launch { saveSearchQuery(brand.name) }
+                    val trimmed = searchText.trim()
+                    if (trimmed.isNotEmpty()) {
+                        recentSearches.removeAll { it.query == trimmed }
+                        recentSearches.add(0, RecentSearchEntry(trimmed, 1))
+                        if (recentSearches.size > 10) {
+                            recentSearches.removeAt(recentSearches.size - 1)
+                        }
+                        scope.launch { saveSearchQuery(trimmed) }
+                    }
+                    visitedBrands = visitedBrands.filter { it.brandId != brand.id } + VisitedBrand(
+                        brandId = brand.id, brandName = brand.name, logoUrl = brand.logoUrl, tags = brand.tags
+                    )
+                    scope.launch { saveRecentlyVisitedBrand(brand) }
                     onBrandClick(brand.id)
                 },
                 onResultClick = { restaurant -> onRestaurantClick(restaurant.id.toString()) }
@@ -306,6 +334,65 @@ private suspend fun saveSearchQuery(query: String) = withContext(Dispatchers.IO)
     }
 }
 
+private suspend fun loadRecentlyVisitedBrands(): List<VisitedBrand> = withContext(Dispatchers.IO) {
+    try {
+        val url = URL("${Config.API_BASE_URL}/users/recently-visited-brands")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "GET"
+        conn.setRequestProperty("Content-Type", "application/json")
+        AuthManager.getToken()?.let {
+            conn.setRequestProperty("Authorization", "Bearer $it")
+        }
+        val json = conn.inputStream.bufferedReader().readText()
+        val obj = JSONObject(json)
+        val arr = obj.getJSONArray("brands")
+        (0 until arr.length()).map { i ->
+            val item = arr.getJSONObject(i)
+            val tags = mutableListOf<String>()
+            val tagsArr = item.optJSONArray("tags")
+            if (tagsArr != null) {
+                for (j in 0 until tagsArr.length()) {
+                    tags.add(tagsArr.getString(j))
+                }
+            }
+            VisitedBrand(
+                brandId = item.getString("brandId"),
+                brandName = item.getString("brandName"),
+                logoUrl = item.optString("logoUrl", ""),
+                tags = tags
+            )
+        }
+    } catch (e: Exception) {
+        android.util.Log.e("SearchFood", "Failed to load recently visited brands", e)
+        emptyList()
+    }
+}
+
+private suspend fun saveRecentlyVisitedBrand(brand: BrandSuggestion) = withContext(Dispatchers.IO) {
+    try {
+        val url = URL("${Config.API_BASE_URL}/users/recently-visited-brands")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json")
+        AuthManager.getToken()?.let {
+            conn.setRequestProperty("Authorization", "Bearer $it")
+        }
+        conn.doOutput = true
+        val tagsArr = JSONArray()
+        brand.tags?.forEach { tagsArr.put(it) }
+        val body = JSONObject().apply {
+            put("brandId", brand.id)
+            put("brandName", brand.name)
+            put("logoUrl", brand.logoUrl)
+            put("tags", tagsArr)
+        }
+        conn.outputStream.write(body.toString().toByteArray())
+        conn.responseCode
+    } catch (e: Exception) {
+        android.util.Log.e("SearchFood", "Failed to save recently visited brand", e)
+    }
+}
+
 private suspend fun fetchBrandSuggestions(query: String): List<BrandSuggestion> = withContext(Dispatchers.IO) {
     try {
         val encoded = URLEncoder.encode(query, "UTF-8")
@@ -339,7 +426,9 @@ private suspend fun fetchBrandSuggestions(query: String): List<BrandSuggestion> 
 @Composable
 private fun EmptyStateView(
     recentSearches: List<RecentSearchEntry>,
+    visitedBrands: List<VisitedBrand> = emptyList(),
     onSearchClick: (String) -> Unit = {},
+    onBrandClick: (String) -> Unit = {},
     onSeeMore: () -> Unit = {}
 ) {
     LazyColumn(
@@ -379,6 +468,25 @@ private fun EmptyStateView(
             }
         }
 
+        // Recently Visited Stores
+        if (visitedBrands.isNotEmpty()) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(15.dp)) {
+                    Text(
+                        text = "Recently Visited Stores",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    visitedBrands.forEach { brand ->
+                        VisitedBrandRow(
+                            brand = brand,
+                            onClick = { onBrandClick(brand.brandId) }
+                        )
+                    }
+                }
+            }
+        }
+
         // Suggested Searches
         item {
             Column(verticalArrangement = Arrangement.spacedBy(15.dp)) {
@@ -396,6 +504,54 @@ private fun EmptyStateView(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun VisitedBrandRow(
+    brand: VisitedBrand,
+    onClick: () -> Unit = {}
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        if (brand.logoUrl.isNotEmpty()) {
+            AsyncImage(
+                model = brand.logoUrl,
+                contentDescription = brand.brandName,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+            )
+            Spacer(modifier = Modifier.width(15.dp))
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = brand.brandName,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+            if (!brand.tags.isNullOrEmpty()) {
+                Text(
+                    text = brand.tags.take(3).joinToString(" • "),
+                    fontSize = 13.sp,
+                    color = Color.Gray
+                )
+            }
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = Color.Gray.copy(alpha = 0.5f)
+        )
     }
 }
 
