@@ -57,6 +57,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.birdy.data.AuthManager
+import com.example.birdy.ui.explore.NewDriverDetailScreen
+import com.example.birdy.ui.explore.NewDriverScreen
+import com.example.birdy.ui.explore.NewHomeBatchScreen
+import com.example.birdy.ui.explore.RestaurantEntry
 import java.util.Locale
 
 // iOS color constants
@@ -72,7 +76,7 @@ private val OrangeSec3 = Color(0xFFFF9500)
 enum class AccountPage {
     Main, Help, Wallet, Pass, ManageAccount, SignIn, SignOut, DeleteAccount, Profile,
     Settings, Referral, ReferralCode, Notifications, Language, BugReporter,
-    TestPages, ChatView, VerifyOtp
+    TestPages, ChatView, NewHomeBatch, NewDriver, NewDriverDetail, VerifyOtp
 }
 
 // Matches iOS Account.swift
@@ -85,6 +89,7 @@ fun AccountScreen(
     var refreshKey by remember { mutableStateOf(0) }
     // Store phone number for OTP verification screen
     var otpPhoneNumber by remember { mutableStateOf("") }
+    var detailEntry by remember { mutableStateOf<RestaurantEntry?>(null) }
     val context = LocalContext.current
 
     // Route to the correct sub-page
@@ -159,11 +164,29 @@ fun AccountScreen(
         )
         AccountPage.TestPages -> TestPagesScreen(
             onBack = { currentPage = AccountPage.Main },
-            onNavigateToChatView = { currentPage = AccountPage.ChatView }
+            onNavigateToChatView = { currentPage = AccountPage.ChatView },
+            onNavigateToNewHomeBatch = { currentPage = AccountPage.NewHomeBatch },
+            onNavigateToNewDriver = { currentPage = AccountPage.NewDriver }
         )
         AccountPage.ChatView -> ChatScreen(
             onBack = { currentPage = AccountPage.TestPages }
         )
+        AccountPage.NewHomeBatch -> NewHomeBatchScreen(
+            onBack = { currentPage = AccountPage.TestPages }
+        )
+        AccountPage.NewDriver -> NewDriverScreen(
+            onBack = { currentPage = AccountPage.TestPages },
+            onNavigateToDetail = { entry ->
+                detailEntry = entry
+                currentPage = AccountPage.NewDriverDetail
+            }
+        )
+        AccountPage.NewDriverDetail -> detailEntry?.let {
+            NewDriverDetailScreen(
+                entry = it,
+                onBack = { currentPage = AccountPage.NewDriver }
+            )
+        }
         AccountPage.Main -> {
             // Read user info from AuthManager — re-read when refreshKey changes (after login/logout)
             val displayName = remember(refreshKey) {

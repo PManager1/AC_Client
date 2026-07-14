@@ -1,0 +1,433 @@
+{
+  "zone": "GW University Zone",
+  "activityEvents": [
+    {
+      "id": "evt_001",
+      "message": "Alex M. joined the Shake Shack batch",
+      "timeAgo": "2m ago"
+    },
+    {
+      "id": "evt_002",
+      "message": "Chinatown → GWU train departing in 15 mins",
+      "timeAgo": "5m ago"
+    },
+    {
+      "id": "evt_003",
+      "message": "Sarah K. locked in 15% off at Chick-fil-A",
+      "timeAgo": "7m ago"
+    },
+    {
+      "id": "evt_004",
+      "message": "Tony Cheng's batch just filled up! 🚀",
+      "timeAgo": "12m ago"
+    },
+    {
+      "id": "evt_005",
+      "message": "Kisso Asian Bistro batch heating up — 2 spots left!",
+      "timeAgo": "1m ago"
+    }
+  ],
+  "deliveryTrains": [
+    {
+      "trainId": "train_001",
+      "targetDeliveryTime": "7:00 PM",
+      "orderDeadline": "2026-07-09T18:10:00-04:00",
+      "statusType": "closing_soon",
+      "batches": [
+         {
+          "batchId": "batch_002",
+          "restaurantName": "Shake Shack",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "ShackBurger + Fries",
+          "originalPrice": 14.00,
+          "discountedPrice": 10.99,
+          "currentOrdersCount": 8,
+          "targetOrdersRequired": 9,
+          "imageUrl": "shackburger_lg.jpeg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_001",
+          "restaurantName": "Chick-fil-A",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Spicy Chicken Sandwich",
+          "originalPrice": 12.00,
+          "discountedPrice": 9.50,
+          "currentOrdersCount": 8,
+          "targetOrdersRequired": 9,
+          "imageUrl": "chikfilA.avif",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_003",
+          "restaurantName": "Tony Cheng's",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Mongolian Beef",
+          "originalPrice": 16.00,
+          "discountedPrice": 12.80,
+          "currentOrdersCount": 7,
+          "targetOrdersRequired": 9,
+          "imageUrl": "Tonycheng-mongolian-beef.avif",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_004",
+          "restaurantName": "Kisso Asian Bistro",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Kung Pao Chicken",
+          "originalPrice": 13.50,
+          "discountedPrice": 10.50,
+          "currentOrdersCount": 5,
+          "targetOrdersRequired": 7,
+          "imageUrl": "Kisso-asian-bistro.avif",
+          "restaurantLogo": ""
+        }
+      ]
+    },
+    {
+      "trainId": "train_002",
+      "targetDeliveryTime": "7:30 PM",
+      "orderDeadline": "2026-07-09T23:31:00-04:00",
+      "statusType": "closing_in",
+      "batches": [
+        {
+          "batchId": "batch_007",
+          "restaurantName": "Bonchon",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Soy Garlic Wings (10pc)",
+          "originalPrice": 18.00,
+          "discountedPrice": 14.50,
+          "currentOrdersCount": 4,
+          "targetOrdersRequired": 5,
+          "imageUrl": "bonchon_b2.webp",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_008",
+          "restaurantName": "Taco Bell",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Crunchwrap Supreme Box",
+          "originalPrice": 11.00,
+          "discountedPrice": 8.50,
+          "currentOrdersCount": 3,
+          "targetOrdersRequired": 5,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_009",
+          "restaurantName": "Subway",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Footlong Italian B.M.T.",
+          "originalPrice": 10.00,
+          "discountedPrice": 7.99,
+          "currentOrdersCount": 3,
+          "targetOrdersRequired": 6,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_010",
+          "restaurantName": "Chipotle",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Chicken Burrito Bowl",
+          "originalPrice": 12.50,
+          "discountedPrice": 9.99,
+          "currentOrdersCount": 2,
+          "targetOrdersRequired": 6,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_011",
+          "restaurantName": "Panda Express",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Orange Chicken Plate",
+          "originalPrice": 11.50,
+          "discountedPrice": 9.25,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 5,
+          "imageUrl": "PandaExpress.avif",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_012",
+          "restaurantName": "Dunkin'",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Box of 12 Donuts",
+          "originalPrice": 16.00,
+          "discountedPrice": 12.50,
+          "currentOrdersCount": 0,
+          "targetOrdersRequired": 5,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_005",
+          "restaurantName": "Pizza Hut",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Medium Pepperoni Pizza",
+          "originalPrice": 15.00,
+          "discountedPrice": 11.99,
+          "currentOrdersCount": 3,
+          "targetOrdersRequired": 7,
+          "imageUrl": "pizza-hut.avif",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_006",
+          "restaurantName": "Cava",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Bowl + Pita Combo",
+          "originalPrice": 13.50,
+          "discountedPrice": 10.50,
+          "currentOrdersCount": 2,
+          "targetOrdersRequired": 8,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        }
+      ]
+    },
+    {
+      "trainId": "train_003",
+      "targetDeliveryTime": "8:00 PM",
+      "orderDeadline": "2026-07-09T19:10:00-04:00",
+      "statusType": "closing_soon",
+      "batches": [
+        {
+          "batchId": "batch_013",
+          "restaurantName": "McDonald's",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Big Mac Meal",
+          "originalPrice": 13.99,
+          "discountedPrice": 10.99,
+          "currentOrdersCount": 7,
+          "targetOrdersRequired": 9,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_014",
+          "restaurantName": "Starbucks",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Iced Caramel Macchiato",
+          "originalPrice": 6.50,
+          "discountedPrice": 4.99,
+          "currentOrdersCount": 5,
+          "targetOrdersRequired": 7,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_015",
+          "restaurantName": "Domino's",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Large Cheese Pizza",
+          "originalPrice": 14.00,
+          "discountedPrice": 10.50,
+          "currentOrdersCount": 4,
+          "targetOrdersRequired": 8,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_028",
+          "restaurantName": "China Express",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "General Tso's Chicken",
+          "originalPrice": 11.00,
+          "discountedPrice": 8.50,
+          "currentOrdersCount": 2,
+          "targetOrdersRequired": 5,
+          "imageUrl": "china-express.avif",
+          "restaurantLogo": ""
+        }
+      ]
+    },
+    {
+      "trainId": "train_004",
+      "targetDeliveryTime": "8:30 PM",
+      "orderDeadline": "2026-07-09T23:45:00-04:00",
+      "statusType": "closing_in",
+      "batches": [
+        {
+          "batchId": "batch_016",
+          "restaurantName": "Wendy's",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Dave's Single Combo",
+          "originalPrice": 11.50,
+          "discountedPrice": 8.99,
+          "currentOrdersCount": 4,
+          "targetOrdersRequired": 5,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_017",
+          "restaurantName": "Papa John's",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Medium Pepperoni Pizza",
+          "originalPrice": 15.00,
+          "discountedPrice": 11.99,
+          "currentOrdersCount": 3,
+          "targetOrdersRequired": 5,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_018",
+          "restaurantName": "Baja Fresh",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Grilled Steak Burrito",
+          "originalPrice": 13.00,
+          "discountedPrice": 10.25,
+          "currentOrdersCount": 2,
+          "targetOrdersRequired": 6,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        }
+      ]
+    },
+    {
+      "trainId": "train_005",
+      "targetDeliveryTime": "9:00 PM",
+      "orderDeadline": "2026-07-09T20:10:00-04:00",
+      "batches": [
+        {
+          "batchId": "batch_019",
+          "restaurantName": "Nando's",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Peri-Peri Chicken (½)",
+          "originalPrice": 15.50,
+          "discountedPrice": 12.50,
+          "currentOrdersCount": 4,
+          "targetOrdersRequired": 5,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_020",
+          "restaurantName": "Jamba Juice",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Aloha Pineapple Bowl",
+          "originalPrice": 9.50,
+          "discountedPrice": 7.50,
+          "currentOrdersCount": 3,
+          "targetOrdersRequired": 5,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_021",
+          "restaurantName": "Potbelly",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "A Wreck Sandwich",
+          "originalPrice": 11.00,
+          "discountedPrice": 8.75,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 5,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        }
+      ]
+    },
+    {
+      "trainId": "train_006",
+      "targetDeliveryTime": "9:30 PM",
+      "orderDeadline": "2026-07-09T23:25:00-04:00",
+      "batches": [
+        {
+          "batchId": "batch_022",
+          "restaurantName": "Five Guys",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Little Cheeseburger + Fries",
+          "originalPrice": 13.00,
+          "discountedPrice": 10.50,
+          "currentOrdersCount": 7,
+          "targetOrdersRequired": 9,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_023",
+          "restaurantName": "Crumbl",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "4-Pack Cookies",
+          "originalPrice": 12.50,
+          "discountedPrice": 9.99,
+          "currentOrdersCount": 2,
+          "targetOrdersRequired": 4,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_024",
+          "restaurantName": "Jersey Mike's",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "#13 Original Italian",
+          "originalPrice": 12.00,
+          "discountedPrice": 9.50,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 6,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_029",
+          "restaurantName": "Tsim Yung",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Singapore Rice Noodles",
+          "originalPrice": 13.50,
+          "discountedPrice": 10.50,
+          "currentOrdersCount": 2,
+          "targetOrdersRequired": 5,
+          "imageUrl": "Tsim-Yung.avif",
+          "restaurantLogo": ""
+        }
+      ]
+    },
+    {
+      "trainId": "train_007",
+      "targetDeliveryTime": "10:00 PM",
+      "orderDeadline": "2026-07-10T00:15:00-04:00",
+      "batches": [
+        {
+          "batchId": "batch_025",
+          "restaurantName": "Sweetgreen",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Harvest Bowl",
+          "originalPrice": 14.50,
+          "discountedPrice": 11.50,
+          "currentOrdersCount": 2,
+          "targetOrdersRequired": 3,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_026",
+          "restaurantName": "Qdoba",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "3-Cheese Nachos",
+          "originalPrice": 11.50,
+          "discountedPrice": 8.99,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 3,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        },
+        {
+          "batchId": "batch_027",
+          "restaurantName": "Noodles & Co.",
+          "brandId": "6a349bb95ddf942f21851661",
+          "itemName": "Wisconsin Mac & Cheese",
+          "originalPrice": 10.50,
+          "discountedPrice": 8.25,
+          "currentOrdersCount": 0,
+          "targetOrdersRequired": 5,
+          "imageUrl": "1.jpg",
+          "restaurantLogo": ""
+        }
+      ]
+    }
+  ]
+}

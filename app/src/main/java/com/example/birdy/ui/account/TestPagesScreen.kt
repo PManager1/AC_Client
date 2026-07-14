@@ -46,7 +46,9 @@ private val OrangeSec2 = Color(0xFF8E8E93)
 @Composable
 fun TestPagesScreen(
     onBack: () -> Unit = {},
-    onNavigateToChatView: () -> Unit = {}
+    onNavigateToChatView: () -> Unit = {},
+    onNavigateToNewHomeBatch: () -> Unit = {},
+    onNavigateToNewDriver: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -95,6 +97,16 @@ fun TestPagesScreen(
                     title = "ChatView",
                     showDivider = true,
                     onClick = onNavigateToChatView
+                )
+                TestPageRow(
+                    title = "NewHomeBatch",
+                    showDivider = true,
+                    onClick = onNavigateToNewHomeBatch
+                )
+                TestPageRow(
+                    title = "NewDriver",
+                    showDivider = false,
+                    onClick = onNavigateToNewDriver
                 )
             }
         }

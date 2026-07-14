@@ -1,0 +1,22 @@
+{
+  "restaurants": [
+    { "time": "3:00 PM", "name": "Chic-fil-A", "subtitle": "ChinaTown → GW University", "offer": "$30", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "3:40 PM", "name": "Shake shack", "subtitle": "ChinaTown → GW University", "offer": "$31", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "4:20 PM", "name": "Chinese Food", "subtitle": "ChinaTown → GW University", "offer": "$32", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "5:00 PM", "name": "Taco Bell", "subtitle": "ChinaTown → GW University", "offer": "$30", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "5:40 PM", "name": "Tony Cheng's", "subtitle": "ChinaTown → GW University", "offer": "$35", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "6:20 PM", "name": "Subway", "subtitle": "ChinaTown → Logan Circle", "offer": "$52", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "7:00 PM", "name": "Pizza Hut", "subtitle": "ChinaTown → Logan Circle", "offer": "$40", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "7:40 PM", "name": "Raising Cane", "subtitle": "ChinaTown → Logan Circle", "offer": "$40", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "8:20 PM", "name": "Raising Cane", "subtitle": "ChinaTown → Navy Yard", "offer": "$40", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "9:00 PM", "name": "Daikaya", "subtitle": "ChinaTown → Navy Yard", "offer": "$40", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "8:20 PM", "name": "Chipotle", "subtitle": "ChinaTown → GW University", "offer": "$40", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "9:00 PM", "name": "Chipotle", "subtitle": "ChinaTown → Navy Yard", "offer": "$40", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "9:40 PM", "name": "KFC", "subtitle": "ChinaTown → Navy Yard", "offer": "$40", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "10:00 PM", "name": "Chipotle", "subtitle": "ChinaTown → NOMA", "offer": "$40", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "10:20 PM", "name": "Succotash Prime", "subtitle": "ChinaTown → NOMA", "offer": "$40", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "11:00 PM", "name": "KFC", "subtitle": "ChinaTown → NOMA", "offer": "$40", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "11:30 PM", "name": "Tonari", "subtitle": "ChinaTown → NOMA", "offer": "$40", "timeNdistance": "20 min (2.2 mi) total" },
+    { "time": "12:00 PM", "name": "KFC", "subtitle": "ChinaTown → NOMA", "offer": "$40", "timeNdistance": "20 min (2.2 mi) total" }
+  ]
+}
