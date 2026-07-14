@@ -4,6 +4,7 @@ import android.content.res.Resources
 import android.util.Log
 import com.example.birdy.R
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,7 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Fireplace
-import androidx.compose.material.icons.filled.ForkKnife
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
@@ -486,7 +487,7 @@ private fun BatchCard(item: BatchItem) {
                     .background(SystemGray6),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.ForkKnife, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                Icon(Icons.Default.Restaurant, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
             }
 
             // Spot Progress Circle overlay

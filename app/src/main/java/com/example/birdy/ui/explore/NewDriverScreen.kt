@@ -6,13 +6,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ErrorOutline
-import androidx.compose.material.icons.filled.HandGesture
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.PanTool
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,6 +25,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -34,13 +34,13 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.max
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import com.example.birdy.R
 import java.text.SimpleDateFormat
 import java.util.*
-import kotlin.math.max
-
 // MARK: - Color Constants
 
 private val DarkGreen = Color(0xFF008000)
@@ -105,11 +105,18 @@ fun NewDriverScreen(
     fun releaseCardById(id: String) {
         cardStates = cardStates + (id to CardState.Available)
         cardDeadlines = cardDeadlines - id
-        val entry = activeRuns.find { it.id == id } ?: return
-        val idx = restaurants.indexOfFirst { it.orderIndex > entry.orderIndex }
-        activeRuns = activeRuns.filter { it.id != id }
-        restaurants = if (idx >= 0) restaurants.toMutableList().apply { add(idx, entry) }
-        else restaurants + entry
+        val currentActive: List<RestaurantEntry> = activeRuns
+        val entry = currentActive.find { it.id == id } ?: return
+        activeRuns = currentActive.filter { it.id != id }
+        val currentRestaurants: List<RestaurantEntry> = restaurants
+        val idx = currentRestaurants.indexOfFirst { it.orderIndex > entry.orderIndex }
+        val mutable = currentRestaurants.toMutableList()
+        if (idx >= 0) {
+            mutable.add(idx, entry)
+            restaurants = mutable
+        } else {
+            restaurants = currentRestaurants + entry
+        }
     }
 
     // Timer tick
@@ -133,8 +140,9 @@ fun NewDriverScreen(
         }
     }
 
-    val pipelineOrderCount = max(restaurants.size + activeRuns.size, 4)
-    val pipelineTotalEst = (restaurants.take(4) + activeRuns).take(4).sumOf { it.payoutValue }
+    val pipelineOrderCount = (restaurants.size + activeRuns.size).coerceAtLeast(4)
+    val combinedTotal: List<RestaurantEntry> = restaurants.take(4) + activeRuns
+    val pipelineTotalEst = combinedTotal.take(4).sumOf { entry -> entry.payoutValue }
     val pipelineProgress = pipelineOrderCount.toFloat() / 10f
 
     Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
@@ -207,11 +215,14 @@ fun NewDriverScreen(
                                 val deadline = System.currentTimeMillis() + 30 * 60 * 1000
                                 cardStates = cardStates + (entry.id to CardState.Locked)
                                 cardDeadlines = cardDeadlines + (entry.id to deadline)
-                                val idx = restaurants.indexOfFirst { it.id == entry.id }
+                                val currentRestaurants: List<RestaurantEntry> = restaurants
+                                val idx = currentRestaurants.indexOfFirst { it.id == entry.id }
                                 if (idx >= 0) {
-                                    val claimed = restaurants[idx]
+                                    val claimed: RestaurantEntry = currentRestaurants[idx]
                                     activeRuns = activeRuns + claimed
-                                    restaurants = restaurants.toMutableList().apply { removeAt(idx) }
+                                    val mutable = currentRestaurants.toMutableList()
+                                    mutable.removeAt(idx)
+                                    restaurants = mutable
                                 }
                             }
                         },
@@ -250,63 +261,31 @@ fun NewDriverScreen(
 private suspend fun loadRestaurants(context: android.content.Context, onResult: (List<RestaurantEntry>) -> Unit) {
     try {
         val json = withContext(Dispatchers.IO) {
-            try {
-                context.resources.openRawResource(
-                    context.resources.getIdentifier("driver_restaurants_mock", "raw", context.packageName)
-                ).bufferedReader().use { it.readText() }
-            } catch (e: Exception) { null }
+            context.resources.openRawResource(R.raw.driver_restaurants_mock)
+                .bufferedReader().use { it.readText() }
         }
-
-        val result = if (json != null) {
-            try {
-                val obj = JSONObject(json)
-                val arr = obj.getJSONArray("restaurants")
-                (0 until arr.length()).map { i ->
-                    val item = arr.getJSONObject(i)
-                    RestaurantEntry(
-                        time = item.getString("time"),
-                        name = item.getString("name"),
-                        subtitle = item.getString("subtitle"),
-                        offer = item.getString("offer"),
-                        timeNdistance = item.optString("timeNdistance", "20 min (2.2 mi) total")
-                    )
-                }
-            } catch (e: Exception) { fallbackRestaurants() }
-        } else {
-            fallbackRestaurants()
+        val obj = JSONObject(json)
+        val arr = obj.getJSONArray("restaurants")
+        val result = (0 until arr.length()).map { i ->
+            val item = arr.getJSONObject(i)
+            RestaurantEntry(
+                time = item.getString("time"),
+                name = item.getString("name"),
+                subtitle = item.getString("subtitle"),
+                offer = item.getString("offer"),
+                timeNdistance = item.optString("timeNdistance", "20 min (2.2 mi) total")
+            )
         }
-
         withContext(Dispatchers.Main) {
             onResult(result.mapIndexed { index, entry -> entry.copy(orderIndex = index) })
         }
     } catch (e: Exception) {
-        Log.e("NewDriver", "Failed to load restaurants", e)
+        Log.e("NewDriver", "Failed to load restaurants from JSON", e)
         withContext(Dispatchers.Main) {
-            onResult(fallbackRestaurants().mapIndexed { index, entry -> entry.copy(orderIndex = index) })
+            onResult(emptyList())
         }
     }
 }
-
-private fun fallbackRestaurants() = listOf(
-    RestaurantEntry(time = "3:00 PM", name = "Chic-fil-A", subtitle = "ChinaTown → GW University", offer = "$30"),
-    RestaurantEntry(time = "3:40 PM", name = "Shake shack", subtitle = "ChinaTown → GW University", offer = "$31"),
-    RestaurantEntry(time = "4:20 PM", name = "Chinese Food", subtitle = "ChinaTown → GW University", offer = "$32"),
-    RestaurantEntry(time = "5:00 PM", name = "Taco Bell", subtitle = "ChinaTown → GW University", offer = "$30"),
-    RestaurantEntry(time = "5:40 PM", name = "Tony Cheng's", subtitle = "ChinaTown → GW University", offer = "$35"),
-    RestaurantEntry(time = "6:20 PM", name = "Subway", subtitle = "ChinaTown → Logan Circle", offer = "$52"),
-    RestaurantEntry(time = "7:00 PM", name = "Pizza Hut", subtitle = "ChinaTown → Logan Circle", offer = "$40"),
-    RestaurantEntry(time = "7:40 PM", name = "Raising Cane", subtitle = "ChinaTown → Logan Circle", offer = "$40"),
-    RestaurantEntry(time = "8:20 PM", name = "Raising Cane", subtitle = "ChinaTown → Navy Yard", offer = "$40"),
-    RestaurantEntry(time = "9:00 PM", name = "Daikaya", subtitle = "ChinaTown → Navy Yard", offer = "$40"),
-    RestaurantEntry(time = "8:20 PM", name = "Chipotle", subtitle = "ChinaTown → GW University", offer = "$40"),
-    RestaurantEntry(time = "9:00 PM", name = "Chipotle", subtitle = "ChinaTown → Navy Yard", offer = "$40"),
-    RestaurantEntry(time = "9:40 PM", name = "KFC", subtitle = "ChinaTown → Navy Yard", offer = "$40"),
-    RestaurantEntry(time = "10:00 PM", name = "Chipotle", subtitle = "ChinaTown → NOMA", offer = "$40"),
-    RestaurantEntry(time = "10:20 PM", name = "Succotash Prime", subtitle = "ChinaTown → NOMA", offer = "$40"),
-    RestaurantEntry(time = "11:00 PM", name = "KFC", subtitle = "ChinaTown → NOMA", offer = "$40"),
-    RestaurantEntry(time = "11:30 PM", name = "Tonari", subtitle = "ChinaTown → NOMA", offer = "$40"),
-    RestaurantEntry(time = "12:00 PM", name = "KFC", subtitle = "ChinaTown → NOMA", offer = "$40")
-)
 
 // MARK: - Pipeline Banner
 
@@ -541,7 +520,7 @@ private fun ActiveRunCard(
             if (isLate) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = Color.Red, modifier = Modifier.size(16.dp))
+                    Text("\u26A0\uFE0F", fontSize = 14.sp)
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         "Traffic Delay Detected: You must arrive in $minutesLeft min to keep this batch.",
@@ -608,7 +587,7 @@ private fun ReleaseSheetDialog(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.HandGesture, contentDescription = null, tint = Color.Green)
+                        Icon(Icons.Default.PanTool, contentDescription = null, tint = Color.Green)
                         Text(
                             "No problem! Releasing this early gives other drivers plenty of time to match.",
                             fontSize = 14.sp,
