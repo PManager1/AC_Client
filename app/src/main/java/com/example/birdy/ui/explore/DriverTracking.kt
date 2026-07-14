@@ -27,12 +27,15 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.ReportProblem
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -111,6 +114,7 @@ fun DriverTrackingScreen(
 
     // Options menu
     var showOptionsMenu by remember { mutableStateOf(false) }
+    var showCancelAlert by remember { mutableStateOf(false) }
 
     // Mapbox Map references
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
@@ -439,7 +443,34 @@ fun DriverTrackingScreen(
     // MARK: - Ride Options Bottom Sheet (matches iOS RideOptionsSheet)
     if (showOptionsMenu) {
         RideOptionsBottomSheet(
-            onDismiss = { showOptionsMenu = false }
+            onDismiss = { showOptionsMenu = false },
+            onCancelOrder = { showCancelAlert = true }
+        )
+    }
+
+    // MARK: - Cancel Order Alert (matches iOS .alert)
+    if (showCancelAlert) {
+        AlertDialog(
+            onDismissRequest = { showCancelAlert = false },
+            title = { Text("Cancel Order") },
+            text = { Text("Cancellation is subject to approval and may incur a fee.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showCancelAlert = false
+                        CartManager.showDriverTracking = false
+                        onBack()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
+                ) {
+                    Text("Cancel Order")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCancelAlert = false }) {
+                    Text("Keep Order")
+                }
+            }
         )
     }
 }
@@ -683,7 +714,8 @@ private fun easeInOut(t: Double): Double {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RideOptionsBottomSheet(
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onCancelOrder: () -> Unit
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -745,9 +777,12 @@ private fun RideOptionsBottomSheet(
 
             RideOptionItem(
                 icon = { Icon(Icons.Default.Close, contentDescription = null, tint = Color(0xFFF44336)) },
-                title = "Cancel Ride",
+                title = "Cancel Order",
                 titleColor = Color(0xFFF44336),
-                onClick = onDismiss
+                onClick = {
+                    onDismiss()
+                    onCancelOrder()
+                }
             )
 
             Spacer(modifier = Modifier.height(24.dp))
