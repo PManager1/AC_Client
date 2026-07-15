@@ -41,8 +41,8 @@
           "itemName": "ShackBurger + Fries",
           "originalPrice": 14.00,
           "discountedPrice": 10.99,
-          "currentOrdersCount": 8,
-          "targetOrdersRequired": 9,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -52,8 +52,8 @@
           "itemName": "Spicy Chicken Sandwich",
           "originalPrice": 12.00,
           "discountedPrice": 9.50,
-          "currentOrdersCount": 8,
-          "targetOrdersRequired": 9,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -63,8 +63,8 @@
           "itemName": "Mongolian Beef",
           "originalPrice": 16.00,
           "discountedPrice": 12.80,
-          "currentOrdersCount": 7,
-          "targetOrdersRequired": 9,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -74,8 +74,8 @@
           "itemName": "Kung Pao Chicken",
           "originalPrice": 13.50,
           "discountedPrice": 10.50,
-          "currentOrdersCount": 5,
-          "targetOrdersRequired": 7,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         }
       ]
@@ -93,8 +93,8 @@
           "itemName": "Soy Garlic Wings (10pc)",
           "originalPrice": 18.00,
           "discountedPrice": 14.50,
-          "currentOrdersCount": 4,
-          "targetOrdersRequired": 5,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -104,8 +104,8 @@
           "itemName": "Crunchwrap Supreme Box",
           "originalPrice": 11.00,
           "discountedPrice": 8.50,
-          "currentOrdersCount": 3,
-          "targetOrdersRequired": 5,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -115,8 +115,8 @@
           "itemName": "Footlong Italian B.M.T.",
           "originalPrice": 10.00,
           "discountedPrice": 7.99,
-          "currentOrdersCount": 3,
-          "targetOrdersRequired": 6,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -126,8 +126,8 @@
           "itemName": "Chicken Burrito Bowl",
           "originalPrice": 12.50,
           "discountedPrice": 9.99,
-          "currentOrdersCount": 2,
-          "targetOrdersRequired": 6,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -138,7 +138,7 @@
           "originalPrice": 11.50,
           "discountedPrice": 9.25,
           "currentOrdersCount": 1,
-          "targetOrdersRequired": 5,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -148,8 +148,8 @@
           "itemName": "Box of 12 Donuts",
           "originalPrice": 16.00,
           "discountedPrice": 12.50,
-          "currentOrdersCount": 0,
-          "targetOrdersRequired": 5,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -159,8 +159,8 @@
           "itemName": "Medium Pepperoni Pizza",
           "originalPrice": 15.00,
           "discountedPrice": 11.99,
-          "currentOrdersCount": 3,
-          "targetOrdersRequired": 7,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -170,8 +170,8 @@
           "itemName": "Bowl + Pita Combo",
           "originalPrice": 13.50,
           "discountedPrice": 10.50,
-          "currentOrdersCount": 2,
-          "targetOrdersRequired": 8,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         }
       ]
@@ -189,8 +189,8 @@
           "itemName": "Big Mac Meal",
           "originalPrice": 13.99,
           "discountedPrice": 10.99,
-          "currentOrdersCount": 7,
-          "targetOrdersRequired": 9,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -200,8 +200,8 @@
           "itemName": "Iced Caramel Macchiato",
           "originalPrice": 6.50,
           "discountedPrice": 4.99,
-          "currentOrdersCount": 5,
-          "targetOrdersRequired": 7,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -211,8 +211,8 @@
           "itemName": "Large Cheese Pizza",
           "originalPrice": 14.00,
           "discountedPrice": 10.50,
-          "currentOrdersCount": 4,
-          "targetOrdersRequired": 8,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -222,8 +222,8 @@
           "itemName": "General Tso's Chicken",
           "originalPrice": 11.00,
           "discountedPrice": 8.50,
-          "currentOrdersCount": 2,
-          "targetOrdersRequired": 5,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         }
       ]
@@ -241,8 +241,8 @@
           "itemName": "Dave's Single Combo",
           "originalPrice": 11.50,
           "discountedPrice": 8.99,
-          "currentOrdersCount": 4,
-          "targetOrdersRequired": 5,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -252,8 +252,8 @@
           "itemName": "Medium Pepperoni Pizza",
           "originalPrice": 15.00,
           "discountedPrice": 11.99,
-          "currentOrdersCount": 3,
-          "targetOrdersRequired": 5,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -263,8 +263,8 @@
           "itemName": "Grilled Steak Burrito",
           "originalPrice": 13.00,
           "discountedPrice": 10.25,
-          "currentOrdersCount": 2,
-          "targetOrdersRequired": 6,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         }
       ]
@@ -281,8 +281,8 @@
           "itemName": "Peri-Peri Chicken (½)",
           "originalPrice": 15.50,
           "discountedPrice": 12.50,
-          "currentOrdersCount": 4,
-          "targetOrdersRequired": 5,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -292,8 +292,8 @@
           "itemName": "Aloha Pineapple Bowl",
           "originalPrice": 9.50,
           "discountedPrice": 7.50,
-          "currentOrdersCount": 3,
-          "targetOrdersRequired": 5,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -304,7 +304,7 @@
           "originalPrice": 11.00,
           "discountedPrice": 8.75,
           "currentOrdersCount": 1,
-          "targetOrdersRequired": 5,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         }
       ]
@@ -321,8 +321,8 @@
           "itemName": "Little Cheeseburger + Fries",
           "originalPrice": 13.00,
           "discountedPrice": 10.50,
-          "currentOrdersCount": 7,
-          "targetOrdersRequired": 9,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -332,8 +332,8 @@
           "itemName": "4-Pack Cookies",
           "originalPrice": 12.50,
           "discountedPrice": 9.99,
-          "currentOrdersCount": 2,
-          "targetOrdersRequired": 4,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -344,7 +344,7 @@
           "originalPrice": 12.00,
           "discountedPrice": 9.50,
           "currentOrdersCount": 1,
-          "targetOrdersRequired": 6,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -354,8 +354,8 @@
           "itemName": "Singapore Rice Noodles",
           "originalPrice": 13.50,
           "discountedPrice": 10.50,
-          "currentOrdersCount": 2,
-          "targetOrdersRequired": 5,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         }
       ]
@@ -372,8 +372,8 @@
           "itemName": "Harvest Bowl",
           "originalPrice": 14.50,
           "discountedPrice": 11.50,
-          "currentOrdersCount": 2,
-          "targetOrdersRequired": 3,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -384,7 +384,7 @@
           "originalPrice": 11.50,
           "discountedPrice": 8.99,
           "currentOrdersCount": 1,
-          "targetOrdersRequired": 3,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         },
         {
@@ -394,8 +394,8 @@
           "itemName": "Wisconsin Mac & Cheese",
           "originalPrice": 10.50,
           "discountedPrice": 8.25,
-          "currentOrdersCount": 0,
-          "targetOrdersRequired": 5,
+          "currentOrdersCount": 1,
+          "targetOrdersRequired": 2,
           "restaurantLogo": ""
         }
       ]
