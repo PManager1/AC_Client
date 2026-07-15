@@ -3,6 +3,7 @@ package com.example.birdy.ui.explore
 import android.content.res.Resources
 import android.util.Log
 import com.example.birdy.R
+import com.example.birdy.data.Config
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
@@ -344,12 +345,6 @@ private suspend fun loadMockData(context: android.content.Context, onResult: (Ba
         Log.e("NewHomeBatch", "Failed to load mock data", e)
         withContext(Dispatchers.Main) { onResult(BatchZoneData("Error", emptyList(), mutableListOf())) }
     }
-}
-
-// MARK: - Config API Base URL (matches BirdyKit)
-// Standalone copy so no BirdyKit dependency needed on AC
-private object Config {
-    const val API_BASE_URL = "http://10.0.2.2:8090/api/v1"
 }
 
 // MARK: - Ticker Text

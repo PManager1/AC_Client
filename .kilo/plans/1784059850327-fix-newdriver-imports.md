@@ -1,23 +1,41 @@
-# Fix NewHomeBatchScreen — JSON parsing crash after mock data update
+# Fix NewHomeBatchScreen — images not loading from backend
 
 ## Problem
 
-The `mock_batch_data.json` update removed the `imageUrl` field from every batch item. Line 223 calls `b.getString("imageUrl")` which throws `JSONException` when the key is absent, crashing `loadMockData` before any data reaches the UI. The outer catch (line 345) returns `BatchZoneData("Error", emptyList(), mutableListOf())`, so the page shows nothing.
+The private `Config` object at line 351 uses `http://10.0.2.2:8090/api/v1` (local emulator), but the actual backend is the AWS Dev URL (`https://tcdlm857gf.execute-api.us-east-1.amazonaws.com/dev/api/v1`). The brand API calls at lines 253 and 291 hit the wrong server, so `carouselImages`/`logoUrl` are never received and `imageUrl` stays empty.
+
+Other pages (StoreScreen, SearchFood, etc.) work because they import `com.example.birdy.data.Config` which uses the correct AWS Dev URL.
 
 ## Fix
 
-One change in `app/src/main/java/com/example/birdy/ui/explore/NewHomeBatchScreen.kt`:
+Two changes in `app/src/main/java/com/example/birdy/ui/explore/NewHomeBatchScreen.kt`:
 
-### Line 223 — make `imageUrl` optional when parsing JSON
+### 1. Add import for the real Config (after line 5 `import com.example.birdy.R`)
 
 ```
-- imageUrl = b.getString("imageUrl"),
-+ imageUrl = b.optString("imageUrl", ""),
+import com.example.birdy.data.Config
 ```
 
-When the JSON has `imageUrl` (old format), it reads the value. When absent (new format), it defaults to `""`. The brand API fetch (lines 296–352) then patches `imageUrl` with real URLs from `carouselImages` or `logoUrl` for batch items that get a `brandId`.
+### 2. Remove the private Config override (lines 349–353)
+
+Delete:
+```
+// MARK: - Config API Base URL (matches BirdyKit)
+// Standalone copy so no BirdyKit dependency needed on AC
+private object Config {
+    const val API_BASE_URL = "http://10.0.2.2:8090/api/v1"
+}
+```
+
+All existing references to `Config.API_BASE_URL` in `loadMockData` will now resolve to the imported `com.example.birdy.data.Config` with the correct AWS Dev URL.
+
+No other code changes needed — the brandId-based approach (fetch `/brands/{brandId}`, extract `carouselImages[0]`/`logoUrl`) is already correct per the iOS flow.
+
+## Files changed
+
+Only `app/src/main/java/com/example/birdy/ui/explore/NewHomeBatchScreen.kt`.
 
 ## Verification
 
 `./gradlew :app:compileDebugKotlin` — zero errors.
-On-device: data should render, images load from the backend API.
+On-device: brand API calls hit the correct server, images load from `carouselImages`/`logoUrl`.
