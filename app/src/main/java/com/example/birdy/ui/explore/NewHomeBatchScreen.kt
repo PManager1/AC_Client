@@ -32,16 +32,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.SubcomposeAsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -90,9 +93,9 @@ data class BatchItem(
     val discountedPrice: Double,
     var currentOrdersCount: Int,
     var targetOrdersRequired: Int,
-    val imageUrl: String,
+    var imageUrl: String,
     val restaurantLogo: String,
-    val brandId: String?
+    var brandId: String?
 ) {
     val spotsRemaining: Int get() = targetOrdersRequired - currentOrdersCount
     val discountPercent: Int get() = ((1.0 - discountedPrice / originalPrice) * 100).roundToInt()
@@ -102,7 +105,7 @@ data class BatchItem(
 // MARK: - Main Screen
 
 @Composable
-fun NewHomeBatchScreen(onBack: () -> Unit = {}) {
+fun NewHomeBatchScreen(onBack: () -> Unit = {}, onNavigateToStore: (String) -> Unit = {}) {
     val context = LocalContext.current
     var zoneData by remember { mutableStateOf<BatchZoneData?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -162,7 +165,10 @@ fun NewHomeBatchScreen(onBack: () -> Unit = {}) {
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             train.batches.forEach { item ->
-                                BatchCard(item = item)
+                                BatchCard(
+                                    item = item,
+                                    onClick = { onNavigateToStore(item.brandId!!) }
+                                )
                             }
                         }
                     }
@@ -214,7 +220,7 @@ private suspend fun loadMockData(context: android.content.Context, onResult: (Ba
                         discountedPrice = b.getDouble("discountedPrice"),
                         currentOrdersCount = b.getInt("currentOrdersCount"),
                         targetOrdersRequired = b.getInt("targetOrdersRequired"),
-                        imageUrl = b.getString("imageUrl"),
+                        imageUrl = b.optString("imageUrl", ""),
                         restaurantLogo = b.optString("restaurantLogo", ""),
                         brandId = if (b.has("brandId")) b.getString("brandId") else null
                     )
@@ -241,11 +247,45 @@ private suspend fun loadMockData(context: android.content.Context, onResult: (Ba
             train.copy(targetDeliveryTime = timeFmt.format(trainCal.time))
         }.toMutableList()
 
-        // Fetch brand minBatchOrder for batch items with brandId
+        // Fetch all brands to build a name→ID mapping for navigation
+        val brandNameToId = mutableMapOf<String, String>()
+        try {
+            val brandsUrl = URL("${Config.API_BASE_URL}/brands")
+            val brandsConn = brandsUrl.openConnection() as HttpURLConnection
+            brandsConn.requestMethod = "GET"
+            brandsConn.connectTimeout = 5000
+            brandsConn.readTimeout = 5000
+            val brandsResp = brandsConn.inputStream.bufferedReader().readText()
+            val brandsArr = JSONArray(brandsResp)
+            for (i in 0 until brandsArr.length()) {
+                val b = brandsArr.getJSONObject(i)
+                val id = b.optString("id", "")
+                val name = b.optString("name", "")
+                if (id.isNotEmpty() && name.isNotEmpty()) {
+                    brandNameToId[name.trim().lowercase()] = id
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("NewHomeBatch", "Failed to fetch brands list", e)
+        }
+
+        // Populate brandId for any batch items missing it
+        for (ti in data.deliveryTrains.indices) {
+            for (bi in data.deliveryTrains[ti].batches.indices) {
+                val lookupKey = data.deliveryTrains[ti].batches[bi].restaurantName.trim().lowercase()
+                if (data.deliveryTrains[ti].batches[bi].brandId == null && brandNameToId.containsKey(lookupKey)) {
+                    data.deliveryTrains[ti].batches[bi] =
+                        data.deliveryTrains[ti].batches[bi].copy(brandId = brandNameToId[lookupKey])
+                }
+            }
+        }
+
+        // Fetch brand minBatchOrder + images for batch items with brandId
         val uniqueBrandIds = data.deliveryTrains.flatMap { t -> t.batches.mapNotNull { it.brandId } }.distinct()
         if (uniqueBrandIds.isNotEmpty()) {
-            val brandMinOrders = withContext(Dispatchers.IO) {
+            val brandResult = withContext(Dispatchers.IO) {
                 val map = mutableMapOf<String, Int>()
+                val mapImages = mutableMapOf<String, String>()  // NEW
                 for (brandId in uniqueBrandIds) {
                     try {
                         val url = URL("${Config.API_BASE_URL}/brands/$brandId")
@@ -260,18 +300,40 @@ private suspend fun loadMockData(context: android.content.Context, onResult: (Ba
                         if (minVal != null && minVal > 0) {
                             map[brandId] = minVal
                         }
+                        // Extract first carousel image or logoUrl
+                        val carouselArr = obj.optJSONArray("carouselImages")
+                        if (carouselArr != null && carouselArr.length() > 0) {
+                            val firstImage = carouselArr.optString(0, "")
+                            if (firstImage.isNotEmpty()) mapImages[brandId] = firstImage
+                        } else {
+                            val logo = obj.optString("logoUrl", "")
+                            if (logo.isNotEmpty()) mapImages[brandId] = logo
+                        }
                     } catch (e: Exception) {
                         Log.e("NewHomeBatch", "Failed to fetch brand $brandId", e)
                     }
                 }
-                map
+                // Return both maps
+                Pair(map, mapImages)
             }
+            val brandMinOrders = brandResult.first
+            val brandImages = brandResult.second
             for (ti in data.deliveryTrains.indices) {
                 for (bi in data.deliveryTrains[ti].batches.indices) {
                     val brandId = data.deliveryTrains[ti].batches[bi].brandId
                     if (brandId != null && brandMinOrders.containsKey(brandId)) {
                         data.deliveryTrains[ti].batches[bi] =
                             data.deliveryTrains[ti].batches[bi].copy(targetOrdersRequired = brandMinOrders[brandId]!!)
+                    }
+                }
+            }
+            // Patch imageUrl with brand's first carousel image or logo
+            for (ti in data.deliveryTrains.indices) {
+                for (bi in data.deliveryTrains[ti].batches.indices) {
+                    val brandId = data.deliveryTrains[ti].batches[bi].brandId
+                    if (brandId != null && brandImages.containsKey(brandId)) {
+                        data.deliveryTrains[ti].batches[bi] =
+                            data.deliveryTrains[ti].batches[bi].copy(imageUrl = brandImages[brandId]!!)
                     }
                 }
             }
@@ -471,23 +533,51 @@ private fun CountdownView(deadlineStr: String, statusType: String?) {
 // MARK: - Batch Card
 
 @Composable
-private fun BatchCard(item: BatchItem) {
+private fun BatchCard(item: BatchItem, onClick: () -> Unit = {}) {
+    var showNoStoreAlert by remember { mutableStateOf(false) }
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable {
+            if (item.brandId != null) {
+                onClick()
+            } else {
+                showNoStoreAlert = true
+            }
+        },
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Box {
-            // Image placeholder (iOS uses local bundle images — skip for AC)
+            // Image from brand carousel or placeholder
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(160.dp)
-                    .background(SystemGray6),
-                contentAlignment = Alignment.Center
+                modifier = Modifier.fillMaxWidth().height(160.dp)
             ) {
-                Icon(Icons.Default.Restaurant, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                if (item.imageUrl.isNotEmpty()) {
+                    SubcomposeAsyncImage(
+                        model = item.imageUrl,
+                        contentDescription = item.restaurantName,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                        loading = {
+                            Box(modifier = Modifier.fillMaxSize().background(SystemGray6), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.Gray, strokeWidth = 2.dp)
+                            }
+                        },
+                        error = {
+                            Box(modifier = Modifier.fillMaxSize().background(SystemGray6), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Restaurant, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                            }
+                        }
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(SystemGray6),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Restaurant, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                    }
+                }
             }
 
             // Spot Progress Circle overlay
@@ -500,7 +590,7 @@ private fun BatchCard(item: BatchItem) {
 
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text(
-                "${item.restaurantName} ${item.itemName}",
+                item.restaurantName,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.Black,
@@ -550,6 +640,15 @@ private fun BatchCard(item: BatchItem) {
                 }
             }
         }
+    }
+
+    if (showNoStoreAlert) {
+        AlertDialog(
+            onDismissRequest = { showNoStoreAlert = false },
+            title = { Text("Store Not Available") },
+            text = { Text("This brand doesn't have a store page yet.") },
+            confirmButton = { TextButton(onClick = { showNoStoreAlert = false }) { Text("OK") } }
+        )
     }
 }
 

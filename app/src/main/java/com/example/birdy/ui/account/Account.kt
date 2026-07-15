@@ -1,5 +1,6 @@
 package com.example.birdy.ui.account
 
+import android.util.Log
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -172,7 +173,11 @@ fun AccountScreen(
             onBack = { currentPage = AccountPage.TestPages }
         )
         AccountPage.NewHomeBatch -> NewHomeBatchScreen(
-            onBack = { currentPage = AccountPage.TestPages }
+            onBack = { currentPage = AccountPage.TestPages },
+            onNavigateToStore = { brandId ->
+                Log.d("NewHomeBatch", "Navigate to brand store: $brandId")
+                // TODO: navigate to brand store screen when available
+            }
         )
         AccountPage.NewDriver -> NewDriverScreen(
             onBack = { currentPage = AccountPage.TestPages },

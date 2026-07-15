@@ -43,43 +43,39 @@
           "discountedPrice": 10.99,
           "currentOrdersCount": 8,
           "targetOrdersRequired": 9,
-          "imageUrl": "shackburger_lg.jpeg",
           "restaurantLogo": ""
         },
         {
           "batchId": "batch_001",
           "restaurantName": "Chick-fil-A",
-          "brandId": "6a349bb95ddf942f21851661",
+          "brandId": "6a447d128403a1ea736f846e",
           "itemName": "Spicy Chicken Sandwich",
           "originalPrice": 12.00,
           "discountedPrice": 9.50,
           "currentOrdersCount": 8,
           "targetOrdersRequired": 9,
-          "imageUrl": "chikfilA.avif",
           "restaurantLogo": ""
         },
         {
           "batchId": "batch_003",
           "restaurantName": "Tony Cheng's",
-          "brandId": "6a349bb95ddf942f21851661",
+          "brandId": "6a57852a7e6162dd1d163612",
           "itemName": "Mongolian Beef",
           "originalPrice": 16.00,
           "discountedPrice": 12.80,
           "currentOrdersCount": 7,
           "targetOrdersRequired": 9,
-          "imageUrl": "Tonycheng-mongolian-beef.avif",
           "restaurantLogo": ""
         },
         {
           "batchId": "batch_004",
           "restaurantName": "Kisso Asian Bistro",
-          "brandId": "6a349bb95ddf942f21851661",
+          "brandId": "6a57869c7e6162dd1d163615",
           "itemName": "Kung Pao Chicken",
           "originalPrice": 13.50,
           "discountedPrice": 10.50,
           "currentOrdersCount": 5,
           "targetOrdersRequired": 7,
-          "imageUrl": "Kisso-asian-bistro.avif",
           "restaurantLogo": ""
         }
       ]
@@ -93,97 +89,89 @@
         {
           "batchId": "batch_007",
           "restaurantName": "Bonchon",
-          "brandId": "6a349bb95ddf942f21851661",
+          "brandId": "6a357ace0188656c1289a121",
           "itemName": "Soy Garlic Wings (10pc)",
           "originalPrice": 18.00,
           "discountedPrice": 14.50,
           "currentOrdersCount": 4,
           "targetOrdersRequired": 5,
-          "imageUrl": "bonchon_b2.webp",
           "restaurantLogo": ""
         },
         {
           "batchId": "batch_008",
           "restaurantName": "Taco Bell",
-          "brandId": "6a349bb95ddf942f21851661",
+          "brandId": "6a2ee82c653c121e38233861",
           "itemName": "Crunchwrap Supreme Box",
           "originalPrice": 11.00,
           "discountedPrice": 8.50,
           "currentOrdersCount": 3,
           "targetOrdersRequired": 5,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
           "batchId": "batch_009",
           "restaurantName": "Subway",
-          "brandId": "6a349bb95ddf942f21851661",
+          "brandId": "6a34c4765ddf942f2185168f",
           "itemName": "Footlong Italian B.M.T.",
           "originalPrice": 10.00,
           "discountedPrice": 7.99,
           "currentOrdersCount": 3,
           "targetOrdersRequired": 6,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
           "batchId": "batch_010",
           "restaurantName": "Chipotle",
-          "brandId": "6a349bb95ddf942f21851661",
+          "brandId": "6a2984990bcd537f41ff3373",
           "itemName": "Chicken Burrito Bowl",
           "originalPrice": 12.50,
           "discountedPrice": 9.99,
           "currentOrdersCount": 2,
           "targetOrdersRequired": 6,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
           "batchId": "batch_011",
           "restaurantName": "Panda Express",
-          "brandId": "6a349bb95ddf942f21851661",
+          "brandId": "6a34aa295ddf942f21851664",
           "itemName": "Orange Chicken Plate",
           "originalPrice": 11.50,
           "discountedPrice": 9.25,
           "currentOrdersCount": 1,
           "targetOrdersRequired": 5,
-          "imageUrl": "PandaExpress.avif",
           "restaurantLogo": ""
         },
         {
           "batchId": "batch_012",
           "restaurantName": "Dunkin'",
-          "brandId": "6a349bb95ddf942f21851661",
+          "brandId": "6a264782a11cce94ce7906c6",
           "itemName": "Box of 12 Donuts",
           "originalPrice": 16.00,
           "discountedPrice": 12.50,
           "currentOrdersCount": 0,
           "targetOrdersRequired": 5,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
           "batchId": "batch_005",
           "restaurantName": "Pizza Hut",
-          "brandId": "6a349bb95ddf942f21851661",
+          "brandId": "6a1ce82c122db5ac53620839",
           "itemName": "Medium Pepperoni Pizza",
           "originalPrice": 15.00,
           "discountedPrice": 11.99,
           "currentOrdersCount": 3,
           "targetOrdersRequired": 7,
-          "imageUrl": "pizza-hut.avif",
           "restaurantLogo": ""
         },
         {
           "batchId": "batch_006",
           "restaurantName": "Cava",
-          "brandId": "6a349bb95ddf942f21851661",
+          "brandId": "6a34b5695ddf942f21851671",
           "itemName": "Bowl + Pita Combo",
           "originalPrice": 13.50,
           "discountedPrice": 10.50,
           "currentOrdersCount": 2,
           "targetOrdersRequired": 8,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         }
       ]
@@ -197,13 +185,12 @@
         {
           "batchId": "batch_013",
           "restaurantName": "McDonald's",
-          "brandId": "6a349bb95ddf942f21851661",
+          "brandId": "6a2de4b9d4225a63ebeac0bf",
           "itemName": "Big Mac Meal",
           "originalPrice": 13.99,
           "discountedPrice": 10.99,
           "currentOrdersCount": 7,
           "targetOrdersRequired": 9,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
@@ -215,7 +202,6 @@
           "discountedPrice": 4.99,
           "currentOrdersCount": 5,
           "targetOrdersRequired": 7,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
@@ -227,7 +213,6 @@
           "discountedPrice": 10.50,
           "currentOrdersCount": 4,
           "targetOrdersRequired": 8,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
@@ -239,7 +224,6 @@
           "discountedPrice": 8.50,
           "currentOrdersCount": 2,
           "targetOrdersRequired": 5,
-          "imageUrl": "china-express.avif",
           "restaurantLogo": ""
         }
       ]
@@ -259,7 +243,6 @@
           "discountedPrice": 8.99,
           "currentOrdersCount": 4,
           "targetOrdersRequired": 5,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
@@ -271,7 +254,6 @@
           "discountedPrice": 11.99,
           "currentOrdersCount": 3,
           "targetOrdersRequired": 5,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
@@ -283,7 +265,6 @@
           "discountedPrice": 10.25,
           "currentOrdersCount": 2,
           "targetOrdersRequired": 6,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         }
       ]
@@ -302,7 +283,6 @@
           "discountedPrice": 12.50,
           "currentOrdersCount": 4,
           "targetOrdersRequired": 5,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
@@ -314,7 +294,6 @@
           "discountedPrice": 7.50,
           "currentOrdersCount": 3,
           "targetOrdersRequired": 5,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
@@ -326,7 +305,6 @@
           "discountedPrice": 8.75,
           "currentOrdersCount": 1,
           "targetOrdersRequired": 5,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         }
       ]
@@ -345,7 +323,6 @@
           "discountedPrice": 10.50,
           "currentOrdersCount": 7,
           "targetOrdersRequired": 9,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
@@ -357,7 +334,6 @@
           "discountedPrice": 9.99,
           "currentOrdersCount": 2,
           "targetOrdersRequired": 4,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
@@ -369,7 +345,6 @@
           "discountedPrice": 9.50,
           "currentOrdersCount": 1,
           "targetOrdersRequired": 6,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
@@ -381,7 +356,6 @@
           "discountedPrice": 10.50,
           "currentOrdersCount": 2,
           "targetOrdersRequired": 5,
-          "imageUrl": "Tsim-Yung.avif",
           "restaurantLogo": ""
         }
       ]
@@ -400,7 +374,6 @@
           "discountedPrice": 11.50,
           "currentOrdersCount": 2,
           "targetOrdersRequired": 3,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
@@ -412,7 +385,6 @@
           "discountedPrice": 8.99,
           "currentOrdersCount": 1,
           "targetOrdersRequired": 3,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         },
         {
@@ -424,7 +396,6 @@
           "discountedPrice": 8.25,
           "currentOrdersCount": 0,
           "targetOrdersRequired": 5,
-          "imageUrl": "1.jpg",
           "restaurantLogo": ""
         }
       ]
