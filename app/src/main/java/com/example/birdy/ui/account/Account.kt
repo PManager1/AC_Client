@@ -62,6 +62,7 @@ import com.example.birdy.ui.explore.NewDriverDetailScreen
 import com.example.birdy.ui.explore.NewDriverScreen
 import com.example.birdy.ui.explore.NewHomeBatchScreen
 import com.example.birdy.ui.explore.RestaurantEntry
+import com.example.birdy.ui.store.StoreScreen
 import java.util.Locale
 
 // iOS color constants
@@ -77,7 +78,7 @@ private val OrangeSec3 = Color(0xFFFF9500)
 enum class AccountPage {
     Main, Help, Wallet, Pass, ManageAccount, SignIn, SignOut, DeleteAccount, Profile,
     Settings, Referral, ReferralCode, Notifications, Language, BugReporter,
-    TestPages, ChatView, NewHomeBatch, NewDriver, NewDriverDetail, VerifyOtp
+    TestPages, ChatView, NewHomeBatch, NewDriver, NewDriverDetail, StorePage, VerifyOtp
 }
 
 // Matches iOS Account.swift
@@ -91,6 +92,7 @@ fun AccountScreen(
     // Store phone number for OTP verification screen
     var otpPhoneNumber by remember { mutableStateOf("") }
     var detailEntry by remember { mutableStateOf<RestaurantEntry?>(null) }
+    var selectedBrandId by remember { mutableStateOf("") }
     val context = LocalContext.current
 
     // Route to the correct sub-page
@@ -175,8 +177,8 @@ fun AccountScreen(
         AccountPage.NewHomeBatch -> NewHomeBatchScreen(
             onBack = { currentPage = AccountPage.TestPages },
             onNavigateToStore = { brandId ->
-                Log.d("NewHomeBatch", "Navigate to brand store: $brandId")
-                // TODO: navigate to brand store screen when available
+                selectedBrandId = brandId
+                currentPage = AccountPage.StorePage
             }
         )
         AccountPage.NewDriver -> NewDriverScreen(
@@ -192,6 +194,11 @@ fun AccountScreen(
                 onBack = { currentPage = AccountPage.NewDriver }
             )
         }
+        AccountPage.StorePage -> StoreScreen(
+            restaurantId = selectedBrandId,
+            onBack = { currentPage = AccountPage.NewHomeBatch },
+            onViewCart = { }
+        )
         AccountPage.Main -> {
             // Read user info from AuthManager — re-read when refreshKey changes (after login/logout)
             val displayName = remember(refreshKey) {

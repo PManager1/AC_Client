@@ -1,41 +1,76 @@
-# Fix NewHomeBatchScreen — images not loading from backend
+# Fix NewHomeBatchScreen — wire onNavigateToStore to StoreScreen
 
 ## Problem
 
-The private `Config` object at line 351 uses `http://10.0.2.2:8090/api/v1` (local emulator), but the actual backend is the AWS Dev URL (`https://tcdlm857gf.execute-api.us-east-1.amazonaws.com/dev/api/v1`). The brand API calls at lines 253 and 291 hit the wrong server, so `carouselImages`/`logoUrl` are never received and `imageUrl` stays empty.
-
-Other pages (StoreScreen, SearchFood, etc.) work because they import `com.example.birdy.data.Config` which uses the correct AWS Dev URL.
-
-## Fix
-
-Two changes in `app/src/main/java/com/example/birdy/ui/explore/NewHomeBatchScreen.kt`:
-
-### 1. Add import for the real Config (after line 5 `import com.example.birdy.R`)
-
-```
-import com.example.birdy.data.Config
-```
-
-### 2. Remove the private Config override (lines 349–353)
-
-Delete:
-```
-// MARK: - Config API Base URL (matches BirdyKit)
-// Standalone copy so no BirdyKit dependency needed on AC
-private object Config {
-    const val API_BASE_URL = "http://10.0.2.2:8090/api/v1"
+`Account.kt:177-180` has a TODO placeholder for `onNavigateToStore`:
+```kotlin
+onNavigateToStore = { brandId ->
+    Log.d("NewHomeBatch", "Navigate to brand store: $brandId")
+    // TODO: navigate to brand store screen when available
 }
 ```
 
-All existing references to `Config.API_BASE_URL` in `loadMockData` will now resolve to the imported `com.example.birdy.data.Config` with the correct AWS Dev URL.
+Clicking a restaurant card logs the `brandId` but does nothing visible.
 
-No other code changes needed — the brandId-based approach (fetch `/brands/{brandId}`, extract `carouselImages[0]`/`logoUrl`) is already correct per the iOS flow.
+## Fix — 4 edits in `Account.kt`
+
+### 1. Add Store import (after line 63)
+```
+import com.example.birdy.ui.store.StoreScreen
+```
+
+### 2. Add Store to AccountPage enum (line 78)
+Change:
+```kotlin
+enum class AccountPage {
+    Main, Help, Wallet, Pass, ManageAccount, SignIn, SignOut, DeleteAccount, Profile,
+    Settings, Referral, ReferralCode, Notifications, Language, BugReporter,
+    TestPages, ChatView, NewHomeBatch, NewDriver, NewDriverDetail, VerifyOtp
+}
+```
+To:
+```kotlin
+enum class AccountPage {
+    Main, Help, Wallet, Pass, ManageAccount, SignIn, SignOut, DeleteAccount, Profile,
+    Settings, Referral, ReferralCode, Notifications, Language, BugReporter,
+    TestPages, ChatView, NewHomeBatch, NewDriver, NewDriverDetail, VerifyOtp, Store
+}
+```
+
+### 3. Add state variable for restaurantId (after line 93)
+```
+var storeRestaurantId by remember { mutableStateOf("") }
+```
+
+### 4. Replace the TODO placeholder (lines 177-180)
+Change:
+```kotlin
+onNavigateToStore = { brandId ->
+    Log.d("NewHomeBatch", "Navigate to brand store: $brandId")
+    // TODO: navigate to brand store screen when available
+}
+```
+To:
+```kotlin
+onNavigateToStore = { brandId ->
+    storeRestaurantId = brandId
+    currentPage = AccountPage.Store
+}
+```
+
+### 5. Add Store route case (after the NewHomeBatch case, before NewDriver)
+```kotlin
+AccountPage.Store -> StoreScreen(
+    restaurantId = storeRestaurantId,
+    onBack = { currentPage = AccountPage.NewHomeBatch }
+)
+```
 
 ## Files changed
 
-Only `app/src/main/java/com/example/birdy/ui/explore/NewHomeBatchScreen.kt`.
+Only `app/src/main/java/com/example/birdy/ui/account/Account.kt`.
 
 ## Verification
 
 `./gradlew :app:compileDebugKotlin` — zero errors.
-On-device: brand API calls hit the correct server, images load from `carouselImages`/`logoUrl`.
+On-device: clicking a restaurant card in NewHomeBatchScreen navigates to StoreScreen with the correct brandId.
