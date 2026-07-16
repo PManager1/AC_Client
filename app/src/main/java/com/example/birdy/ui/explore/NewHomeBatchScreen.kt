@@ -817,7 +817,7 @@ private fun OrderPlacedArrivalTimeCard(estimatedArrival: String) {
             }
 
             Row(
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Top,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 StatusStepItem(title = "Joined", icon = "✓", isFilled = true, isCompleted = true, modifier = Modifier.weight(1f))
