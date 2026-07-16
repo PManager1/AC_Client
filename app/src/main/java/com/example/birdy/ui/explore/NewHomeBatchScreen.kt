@@ -375,7 +375,7 @@ private fun tickerText(tab: String, data: BatchZoneData): String {
         val first = data.deliveryTrains.firstOrNull()
         if (first != null) {
             val urgent = first.batches.count { it.spotsRemaining <= 2 }
-            return "${first.targetDeliveryTime} Delivery Train · $urgent items filling fast 😍"
+            return "${first.targetDeliveryTime} Delivery Batch · $urgent items filling fast 😍"
         }
         return "Hot batches available now 🔥"
     }
@@ -383,9 +383,9 @@ private fun tickerText(tab: String, data: BatchZoneData): String {
     if (train != null) {
         val urgent = train.batches.count { it.spotsRemaining == 1 }
         if (urgent > 0) {
-            return "$tab Delivery Train · $urgent batch${if (urgent == 1) "" else "es"} need just 1 more! 😍"
+            return "$tab Delivery Batch · $urgent batch${if (urgent == 1) "" else "es"} need just 1 more! 😍"
         }
-        return "$tab Delivery Train · Join a batch & save"
+        return "$tab Delivery Batch · Join a batch & save"
     }
     return "Select a delivery time"
 }
@@ -485,7 +485,7 @@ private fun TrainSectionHeader(train: DeliveryTrain) {
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                "${train.targetDeliveryTime} Delivery Train",
+                "${train.targetDeliveryTime} Delivery Batch",
                 fontSize = 18.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = Color.Black
@@ -739,7 +739,7 @@ private fun OrderTrackerView(item: BatchItem, trainDeliveryTime: String, onCance
             Spacer(modifier = Modifier.weight(1f))
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("ORDER TRACKER", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
-                Text("$trainDeliveryTime Delivery Train", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text("$trainDeliveryTime Delivery Batch", fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
             Spacer(modifier = Modifier.weight(1f))
             Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.Gray.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
@@ -797,7 +797,7 @@ private fun OrderTrackerView(item: BatchItem, trainDeliveryTime: String, onCance
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "We've started cooking!\n\nBecause U-DO groups orders together to keep delivery free and prices low, orders cannot be canceled once the kitchen starts preparing the batch. Your driver is already on their way to pick it up!",
+                    "We've started cooking!\n\nBecause U-DO groups orders together to give you discounts, orders cannot be canceled once the kitchen starts preparing the batch. Your driver is already on their way to pick it up!",
                     fontSize = 15.sp,
                     color = Color.Gray,
                     lineHeight = 22.sp
