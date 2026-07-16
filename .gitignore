@@ -19,3 +19,4 @@ app/local.properties
 # IDE specific files
 app/.idea/
 .idea/
+.kilo/
