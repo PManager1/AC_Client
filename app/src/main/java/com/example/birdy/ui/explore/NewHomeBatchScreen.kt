@@ -27,8 +27,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -41,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
+import androidx.compose.animation.core.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -112,6 +115,7 @@ fun NewHomeBatchScreen(onBack: () -> Unit = {}, onNavigateToStore: (String) -> U
     var isLoading by remember { mutableStateOf(true) }
     var selectedTab by remember { mutableStateOf("Now") }
     var scrollTarget by remember { mutableStateOf("") }
+    var joinedBatchIds by remember { mutableStateOf(setOf<String>()) }
     val listState = rememberLazyListState()
 
     val allTimes: List<String> by remember(zoneData) {
@@ -166,9 +170,24 @@ fun NewHomeBatchScreen(onBack: () -> Unit = {}, onNavigateToStore: (String) -> U
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             train.batches.forEach { item ->
+                                val joined = joinedBatchIds.contains(item.id)
                                 BatchCard(
                                     item = item,
-                                    onClick = { onNavigateToStore(item.brandId!!) }
+                                    trainDeliveryTime = train.targetDeliveryTime,
+                                    isJoined = joined,
+                                    onClick = {
+                                        if (item.brandId != null) onNavigateToStore(item.brandId!!)
+                                    },
+                                    onJoin = {
+                                        zoneData?.deliveryTrains?.firstOrNull { it.id == train.id }
+                                            ?.batches?.firstOrNull { it.id == item.id }
+                                            ?.let { batch ->
+                                                if (batch.currentOrdersCount < batch.targetOrdersRequired) {
+                                                    batch.currentOrdersCount++
+                                                }
+                                            }
+                                        joinedBatchIds = joinedBatchIds + item.id
+                                    }
                                 )
                             }
                         }
@@ -528,122 +547,93 @@ private fun CountdownView(deadlineStr: String, statusType: String?) {
 // MARK: - Batch Card
 
 @Composable
-private fun BatchCard(item: BatchItem, onClick: () -> Unit = {}) {
-    var showNoStoreAlert by remember { mutableStateOf(false) }
+private fun BatchCard(
+    item: BatchItem,
+    trainDeliveryTime: String = "",
+    isJoined: Boolean = false,
+    onClick: () -> Unit = {},
+    onJoin: () -> Unit = {}
+) {
+    if (isJoined) {
+        OrderTrackerView(item = item, trainDeliveryTime = trainDeliveryTime)
+    } else {
+        var showNoStoreAlert by remember { mutableStateOf(false) }
 
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable {
-            if (item.brandId != null) {
-                onClick()
-            } else {
-                showNoStoreAlert = true
-            }
-        },
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
-        Box {
-            // Image from brand carousel or placeholder
-            Box(
-                modifier = Modifier.fillMaxWidth().height(160.dp)
-            ) {
-                if (item.imageUrl.isNotEmpty()) {
-                    SubcomposeAsyncImage(
-                        model = item.imageUrl,
-                        contentDescription = item.restaurantName,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                        loading = {
-                            Box(modifier = Modifier.fillMaxSize().background(SystemGray6), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.Gray, strokeWidth = 2.dp)
-                            }
-                        },
-                        error = {
-                            Box(modifier = Modifier.fillMaxSize().background(SystemGray6), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Restaurant, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
-                            }
-                        }
-                    )
+        Card(
+            modifier = Modifier.fillMaxWidth().clickable {
+                if (item.brandId != null) {
+                    onClick()
                 } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(SystemGray6),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(Icons.Default.Restaurant, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
-                    }
+                    showNoStoreAlert = true
                 }
-            }
-
-            // Spot Progress Circle overlay
-            SpotProgressCircle(
-                spotsLeft = item.spotsRemaining,
-                totalSpots = item.targetOrdersRequired,
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 16.dp)
-            )
-        }
-
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Text(
-                item.restaurantName,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color.Black,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(verticalAlignment = Alignment.Bottom) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        "$${String.format("%.2f", item.originalPrice)}",
-                        fontSize = 15.sp,
-                        color = Color.Gray
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "$${String.format("%.2f", item.discountedPrice)}",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.Black
+            },
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Box {
+                Box(modifier = Modifier.fillMaxWidth().height(160.dp)) {
+                    if (item.imageUrl.isNotEmpty()) {
+                        SubcomposeAsyncImage(
+                            model = item.imageUrl,
+                            contentDescription = item.restaurantName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                            loading = {
+                                Box(modifier = Modifier.fillMaxSize().background(SystemGray6), contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.Gray, strokeWidth = 2.dp)
+                                }
+                            },
+                            error = {
+                                Box(modifier = Modifier.fillMaxSize().background(SystemGray6), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Restaurant, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                                }
+                            }
                         )
-                        Text(
-                            "Get ${item.discountPercent}% off",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = BurntOrange,
-                            modifier = Modifier
-                                .background(BurntOrange.copy(alpha = 0.12f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize().background(SystemGray6), contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Restaurant, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.weight(1f))
+                SpotProgressCircle(
+                    spotsLeft = item.spotsRemaining,
+                    totalSpots = item.targetOrdersRequired,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(top = 16.dp, end = 16.dp)
+                )
+            }
 
-                Button(
-                    onClick = {},
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Join Batch", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Text(item.restaurantName, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("$${String.format("%.2f", item.originalPrice)}", fontSize = 15.sp, color = Color.Gray)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("$${String.format("%.2f", item.discountedPrice)}", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
+                            Text("Get ${item.discountPercent}% off", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = BurntOrange,
+                                modifier = Modifier.background(BurntOrange.copy(alpha = 0.12f)).padding(horizontal = 8.dp, vertical = 4.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    Button(onClick = onJoin,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                        shape = RoundedCornerShape(12.dp)) {
+                        Text("Join Batch", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
-    }
 
-    if (showNoStoreAlert) {
-        AlertDialog(
-            onDismissRequest = { showNoStoreAlert = false },
-            title = { Text("Store Not Available") },
-            text = { Text("This brand doesn't have a store page yet.") },
-            confirmButton = { TextButton(onClick = { showNoStoreAlert = false }) { Text("OK") } }
-        )
+        if (showNoStoreAlert) {
+            AlertDialog(
+                onDismissRequest = { showNoStoreAlert = false },
+                title = { Text("Store Not Available") },
+                text = { Text("This brand doesn't have a store page yet.") },
+                confirmButton = { TextButton(onClick = { showNoStoreAlert = false }) { Text("OK") } }
+            )
+        }
     }
 }
 
@@ -704,8 +694,170 @@ private fun SpotProgressCircle(
             fontWeight = FontWeight.ExtraBold,
             color = Color.White,
             modifier = Modifier
-                .background(spotColorAlpha, shape = RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(12.dp)).background(spotColorAlpha)
                 .padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
+}
+
+// MARK: - Order Tracker View
+
+@Composable
+private fun OrderTrackerView(item: BatchItem, trainDeliveryTime: String) {
+    val estimatedArrival = remember {
+        val fmt = SimpleDateFormat("h:mm a", Locale.US)
+        val now = Calendar.getInstance()
+        val start = Calendar.getInstance().apply { time = now.time; add(Calendar.MINUTE, 15) }
+        val end = Calendar.getInstance().apply { time = now.time; add(Calendar.MINUTE, 30) }
+        "${fmt.format(start.time)} - ${fmt.format(end.time)}"
+    }
+
+    Column(modifier = Modifier.fillMaxWidth().background(Color(0xFFFAFAFA))) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.Gray.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("ORDER TRACKER", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                Text("$trainDeliveryTime Delivery Train", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(Color.Gray.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
+                Text("?", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        HeroStatusCard()
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        ArrivalTimelineCard(estimatedArrival = estimatedArrival)
+
+        Spacer(modifier = Modifier.weight(1f))
+    }
+}
+
+// MARK: - Subview: Hero Status Card
+
+@Composable
+private fun HeroStatusCard() {
+    Box(modifier = Modifier.fillMaxWidth().height(240.dp).padding(horizontal = 20.dp)) {
+        SubcomposeAsyncImage(
+            model = "https://storage.googleapis.com/birdyimages/b6d8cef2ab76d039dd932ba06d711d5a.avif",
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                    )
+                )
+        )
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.align(Alignment.BottomStart).padding(20.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.clip(RoundedCornerShape(50.dp)).background(BurntOrange).padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color.White))
+                Text("PREPARING", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Default.Fireplace, contentDescription = null, tint = BurntOrange, modifier = Modifier.size(14.dp))
+                Text("ON THE GRILL", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray.copy(alpha = 0.9f), letterSpacing = 1.5.sp)
+            }
+
+            Text("Your order is\non the grill! 🔥", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, lineHeight = 34.sp)
+        }
+    }
+}
+
+// MARK: - Subview: Arrival Timeline Card
+
+@Composable
+private fun ArrivalTimelineCard(estimatedArrival: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .clip(RoundedCornerShape(24.dp)).background(Color.White)
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(20.dp)
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("ESTIMATED ARRIVAL", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Gray, letterSpacing = 1.sp)
+                Text(estimatedArrival, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
+            }
+
+            Box(
+                modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(BurntOrange.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Timer, contentDescription = null, tint = BurntOrange, modifier = Modifier.size(24.dp))
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                StatusStepItem(title = "Joined", icon = "✓", isFilled = true, isCompleted = true, modifier = Modifier.weight(1f))
+                StatusLineItem(filled = true)
+                StatusStepItem(title = "Prep", subtitle = "Started", icon = "🔥", isFilled = true, isCompleted = false, modifier = Modifier.weight(1f))
+                StatusLineItem(filled = false)
+                StatusStepItem(title = "On Train", icon = "🚃", isFilled = false, isCompleted = false, modifier = Modifier.weight(1f))
+                StatusLineItem(filled = false)
+                StatusStepItem(title = "Delivered", icon = "📦", isFilled = false, isCompleted = false, modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+// MARK: - Status Sub-components
+
+@Composable
+private fun StatusStepItem(title: String, subtitle: String? = null, icon: String, isFilled: Boolean, isCompleted: Boolean, modifier: Modifier = Modifier) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier
+    ) {
+        Box(
+            modifier = Modifier.size(32.dp).clip(CircleShape).background(if (isFilled) BurntOrange else Color.Gray.copy(alpha = 0.1f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(icon, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (isFilled) Color.White else Color.Gray.copy(alpha = 0.6f))
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (isFilled) Color.Black else Color.Gray)
+            if (subtitle != null) {
+                Text(subtitle, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = if (isFilled) BurntOrange else Color.Gray)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusLineItem(filled: Boolean) {
+    Box(modifier = Modifier.height(2.dp).width(16.dp).background(if (filled) BurntOrange else Color.Gray.copy(alpha = 0.2f)))
 }
