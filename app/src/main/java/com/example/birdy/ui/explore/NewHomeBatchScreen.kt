@@ -733,11 +733,11 @@ private fun OrderTrackerView(item: BatchItem, trainDeliveryTime: String) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        HeroStatusCard()
+        OrderPlacedCard()
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        ArrivalTimelineCard(estimatedArrival = estimatedArrival)
+        OrderPlacedArrivalTimeCard(estimatedArrival = estimatedArrival)
 
         Spacer(modifier = Modifier.weight(1f))
     }
@@ -746,7 +746,7 @@ private fun OrderTrackerView(item: BatchItem, trainDeliveryTime: String) {
 // MARK: - Subview: Hero Status Card
 
 @Composable
-private fun HeroStatusCard() {
+private fun OrderPlacedCard() {
     Box(modifier = Modifier.fillMaxWidth().height(240.dp).padding(horizontal = 20.dp)) {
         SubcomposeAsyncImage(
             model = "https://storage.googleapis.com/birdyimages/b6d8cef2ab76d039dd932ba06d711d5a.avif",
@@ -793,7 +793,7 @@ private fun HeroStatusCard() {
 // MARK: - Subview: Arrival Timeline Card
 
 @Composable
-private fun ArrivalTimelineCard(estimatedArrival: String) {
+private fun OrderPlacedArrivalTimeCard(estimatedArrival: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
