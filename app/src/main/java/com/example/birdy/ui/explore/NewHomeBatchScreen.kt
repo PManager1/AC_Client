@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -187,7 +188,8 @@ fun NewHomeBatchScreen(onBack: () -> Unit = {}, onNavigateToStore: (String) -> U
                                                 }
                                             }
                                         joinedBatchIds = joinedBatchIds + item.id
-                                    }
+                                    },
+                                    onCancel = { joinedBatchIds = joinedBatchIds - item.id }
                                 )
                             }
                         }
@@ -552,10 +554,11 @@ private fun BatchCard(
     trainDeliveryTime: String = "",
     isJoined: Boolean = false,
     onClick: () -> Unit = {},
-    onJoin: () -> Unit = {}
+    onJoin: () -> Unit = {},
+    onCancel: () -> Unit = {}
 ) {
     if (isJoined) {
-        OrderTrackerView(item = item, trainDeliveryTime = trainDeliveryTime)
+        OrderTrackerView(item = item, trainDeliveryTime = trainDeliveryTime, onCancel = onCancel)
     } else {
         var showNoStoreAlert by remember { mutableStateOf(false) }
 
@@ -702,14 +705,27 @@ private fun SpotProgressCircle(
 
 // MARK: - Order Tracker View
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun OrderTrackerView(item: BatchItem, trainDeliveryTime: String) {
+private fun OrderTrackerView(item: BatchItem, trainDeliveryTime: String, onCancel: () -> Unit = {}) {
     val estimatedArrival = remember {
         val fmt = SimpleDateFormat("h:mm a", Locale.US)
         val now = Calendar.getInstance()
         val start = Calendar.getInstance().apply { time = now.time; add(Calendar.MINUTE, 15) }
         val end = Calendar.getInstance().apply { time = now.time; add(Calendar.MINUTE, 30) }
         "${fmt.format(start.time)} - ${fmt.format(end.time)}"
+    }
+
+    var secondsLeft by remember { mutableStateOf(120) }
+    var timerExpired by remember { mutableStateOf(false) }
+    var showExpiredSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        while (secondsLeft > 0) {
+            delay(1000)
+            secondsLeft--
+        }
+        timerExpired = true
     }
 
     Column(modifier = Modifier.fillMaxWidth().background(Color(0xFFFAFAFA))) {
@@ -739,7 +755,62 @@ private fun OrderTrackerView(item: BatchItem, trainDeliveryTime: String) {
 
         OrderPlacedArrivalTimeCard(estimatedArrival = estimatedArrival)
 
+        if (!timerExpired) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onCancel,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF4444))
+            ) {
+                val minutes = secondsLeft / 60
+                val secs = secondsLeft % 60
+                Text("Cancel Order (${minutes}:${secs.toString().padStart(2, '0')} remaining)", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+        } else {
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedButton(
+                onClick = { showExpiredSheet = true },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                shape = RoundedCornerShape(12.dp),
+                enabled = false
+            ) {
+                Text("Cancel Order", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+            }
+        }
+
         Spacer(modifier = Modifier.weight(1f))
+    }
+
+    if (showExpiredSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showExpiredSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp).padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    "Order can't be canceled",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "We've started cooking!\n\nBecause U-DO groups orders together to keep delivery free and prices low, orders cannot be canceled once the kitchen starts preparing the batch. Your driver is already on their way to pick it up!",
+                    fontSize = 15.sp,
+                    color = Color.Gray,
+                    lineHeight = 22.sp
+                )
+                Button(
+                    onClick = { showExpiredSheet = false },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Got it", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }
 
@@ -805,7 +876,7 @@ private fun OrderPlacedArrivalTimeCard(estimatedArrival: String) {
             modifier = Modifier.padding(20.dp)
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("ESTIMATED ARRIVAL", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Gray, letterSpacing = 1.sp)
+                Text("ESTIMATED ARRIVAL", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black, letterSpacing = 1.sp)
                 Text(estimatedArrival, fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
             }
 
@@ -859,5 +930,10 @@ private fun StatusStepItem(title: String, subtitle: String? = null, icon: String
 
 @Composable
 private fun StatusLineItem(filled: Boolean) {
-    Box(modifier = Modifier.height(2.dp).width(16.dp).background(if (filled) BurntOrange else Color.Gray.copy(alpha = 0.2f)))
+    Box(
+        modifier = Modifier.height(32.dp).width(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(modifier = Modifier.height(2.dp).width(16.dp).background(if (filled) BurntOrange else Color.Gray.copy(alpha = 0.2f)))
+    }
 }
