@@ -269,6 +269,8 @@ fun TagHomeScreen(
                 Text("🍽️", fontSize = 40.sp)
                 Spacer(modifier = Modifier.height(12.dp))
                 Text("No restaurants found", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Try a different category", fontSize = 14.sp, color = Color.Gray)
             }
         } else {
             Column(

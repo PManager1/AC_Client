@@ -25,6 +25,7 @@ private fun resolveImageUrl(obj: JSONObject, vararg keys: String): String {
     obj.optString("imageUrl", "").let { if (it.isNotEmpty()) return it }
     obj.optString("image_url", "").let { if (it.isNotEmpty()) return it }
     obj.optString("image", "").let { if (it.isNotEmpty()) return it }
+    obj.optString("raw_image_url", "").let { if (it.isNotEmpty()) return it }
     obj.optString("photoUrl", "").let { if (it.isNotEmpty()) return it }
     obj.optString("photo_url", "").let { if (it.isNotEmpty()) return it }
     return ""
