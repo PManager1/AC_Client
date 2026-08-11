@@ -266,6 +266,7 @@ fun SelectAddressSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
+                            errorMessage = null
                             isAddingNewAddress = true
                             gateCodeInput = ""
                             editingAddressId = null
@@ -311,10 +312,18 @@ fun SelectAddressSheet(
                 showGateCodeSheet = false
                 if (isAddingNewAddress) {
                     val data = pendingAddressData
-                    if (data != null) {
-                        scope.launch {
-                            val token = AuthManager.getToken(context)
-                            if (!token.isNullOrEmpty()) {
+                    println("🔎 [AC] onSave new address: isAddingNewAddress=$isAddingNewAddress, pendingAddressData=${data?.street}")
+                    if (data == null) {
+                        // Gate 2 failed — state was lost before we could save.
+                        errorMessage = "Address details were lost. Please try adding again."
+                    } else {
+                        val token = AuthManager.getToken(context)
+                        if (token.isNullOrEmpty()) {
+                            // Gate 3 failed — not authenticated. Show an error instead of silently doing nothing.
+                            println("❌ [AC] onSave: not authenticated, cannot save address")
+                            errorMessage = "Not authenticated. Please sign in and try again."
+                        } else {
+                            scope.launch {
                                 val created = withContext(Dispatchers.IO) {
                                     AddressService.createAddress(
                                         data.street, data.cityStateZip,
@@ -329,12 +338,16 @@ fun SelectAddressSheet(
                                     )
                                 }
                                 if (created != null) {
+                                    errorMessage = null
                                     localAddresses.add(created)
                                     onAddressSelected(created)
                                     selectedId = created.id
+                                } else {
+                                    println("❌ [AC] onSave: createAddress returned null")
+                                    errorMessage = "Failed to save address. Please try again."
                                 }
+                                pendingAddressData = null
                             }
-                            pendingAddressData = null
                         }
                     }
                 } else {
@@ -368,6 +381,7 @@ fun SelectAddressSheet(
             },
             onAddressSelected = { street, cityStateZip, lat, lng ->
                 showAddressSearch = false
+                isAddingNewAddress = true
                 pendingAddressData = AddressSearchResult(street, cityStateZip, lat, lng)
                 selectedAddressType = "house"
                 deliveryPreference = "leave_at_door"

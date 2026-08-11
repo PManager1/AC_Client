@@ -186,8 +186,14 @@ fun AddressSearchScreen(
                                             geocodePlace(suggestion)
                                         }
                                         if (result != null) {
+                                            // NOTE: do NOT call onDismiss() here. The parent's
+                                            // onAddressSelected already closes this search sheet and
+                                            // starts the add-new flow. Calling onDismiss() here would
+                                            // reset the parent's isAddingNewAddress flag and silently
+                                            // break the save (no backend call, no error).
                                             onAddressSelected(result.street, result.cityStateZip, result.latitude, result.longitude)
-                                            onDismiss()
+                                        } else {
+                                            println("❌ [AddressSearch] Geocode returned no result for: ${suggestion.description}")
                                         }
                                     }
                                 }
