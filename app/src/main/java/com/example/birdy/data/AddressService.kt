@@ -45,6 +45,11 @@ object AddressService {
                 street = obj.optString("street", ""),
                 cityStateZip = obj.optString("cityStateZip", ""),
                 gateCode = obj.optString("gateCode", "").ifEmpty { null },
+                label = obj.optString("label", "").ifEmpty { null },
+                addressType = obj.optString("addressType", "").ifEmpty { null },
+                deliveryPreference = obj.optString("deliveryPreference", "").ifEmpty { null },
+                deliveryInstructions = obj.optString("deliveryInstructions", "").ifEmpty { null },
+                isGifting = obj.optBoolean("isGifting", false),
                 isDefault = obj.optBoolean("isDefault", false),
                 latitude = obj.optDouble("latitude", 0.0),
                 longitude = obj.optDouble("longitude", 0.0)
@@ -52,7 +57,19 @@ object AddressService {
         }
     }
 
-    fun createAddress(street: String, cityStateZip: String, latitude: Double, longitude: Double, gateCode: String?, token: String): Address? {
+    fun createAddress(
+        street: String,
+        cityStateZip: String,
+        latitude: Double,
+        longitude: Double,
+        gateCode: String?,
+        label: String?,
+        addressType: String?,
+        deliveryPreference: String?,
+        deliveryInstructions: String?,
+        isGifting: Boolean,
+        token: String
+    ): Address? {
         println("🔍 [AddressService] Creating address: $street")
         return try {
             val jsonBody = org.json.JSONObject().apply {
@@ -61,6 +78,11 @@ object AddressService {
                 put("latitude", latitude)
                 put("longitude", longitude)
                 if (!gateCode.isNullOrEmpty()) put("gateCode", gateCode)
+                if (!label.isNullOrEmpty()) put("label", label)
+                if (!addressType.isNullOrEmpty()) put("addressType", addressType)
+                if (!deliveryPreference.isNullOrEmpty()) put("deliveryPreference", deliveryPreference)
+                if (!deliveryInstructions.isNullOrEmpty()) put("deliveryInstructions", deliveryInstructions)
+                put("isGifting", isGifting)
             }
 
             val url = URL("${Config.API_BASE_URL}/addresses")
@@ -84,6 +106,11 @@ object AddressService {
                     street = obj.optString("street", ""),
                     cityStateZip = obj.optString("cityStateZip", ""),
                     gateCode = obj.optString("gateCode", "").ifEmpty { null },
+                    label = obj.optString("label", "").ifEmpty { null },
+                    addressType = obj.optString("addressType", "").ifEmpty { null },
+                    deliveryPreference = obj.optString("deliveryPreference", "").ifEmpty { null },
+                    deliveryInstructions = obj.optString("deliveryInstructions", "").ifEmpty { null },
+                    isGifting = obj.optBoolean("isGifting", false),
                     isDefault = obj.optBoolean("isDefault", false),
                     latitude = obj.optDouble("latitude", 0.0),
                     longitude = obj.optDouble("longitude", 0.0)
@@ -99,7 +126,20 @@ object AddressService {
         }
     }
 
-    fun updateAddress(id: String, street: String, cityStateZip: String, latitude: Double, longitude: Double, gateCode: String?, token: String): Address? {
+    fun updateAddress(
+        id: String,
+        street: String,
+        cityStateZip: String,
+        latitude: Double,
+        longitude: Double,
+        gateCode: String?,
+        label: String?,
+        addressType: String?,
+        deliveryPreference: String?,
+        deliveryInstructions: String?,
+        isGifting: Boolean,
+        token: String
+    ): Address? {
         println("🔍 [AddressService] Updating address: $id")
         return try {
             val jsonBody = org.json.JSONObject().apply {
@@ -108,6 +148,11 @@ object AddressService {
                 put("latitude", latitude)
                 put("longitude", longitude)
                 if (!gateCode.isNullOrEmpty()) put("gateCode", gateCode)
+                if (!label.isNullOrEmpty()) put("label", label)
+                if (!addressType.isNullOrEmpty()) put("addressType", addressType)
+                if (!deliveryPreference.isNullOrEmpty()) put("deliveryPreference", deliveryPreference)
+                if (!deliveryInstructions.isNullOrEmpty()) put("deliveryInstructions", deliveryInstructions)
+                put("isGifting", isGifting)
             }
 
             val url = URL("${Config.API_BASE_URL}/addresses/$id")
@@ -131,6 +176,11 @@ object AddressService {
                     street = obj.optString("street", ""),
                     cityStateZip = obj.optString("cityStateZip", ""),
                     gateCode = obj.optString("gateCode", "").ifEmpty { null },
+                    label = obj.optString("label", "").ifEmpty { null },
+                    addressType = obj.optString("addressType", "").ifEmpty { null },
+                    deliveryPreference = obj.optString("deliveryPreference", "").ifEmpty { null },
+                    deliveryInstructions = obj.optString("deliveryInstructions", "").ifEmpty { null },
+                    isGifting = obj.optBoolean("isGifting", false),
                     isDefault = obj.optBoolean("isDefault", false),
                     latitude = obj.optDouble("latitude", 0.0),
                     longitude = obj.optDouble("longitude", 0.0)
@@ -167,6 +217,11 @@ object AddressService {
                     street = obj.optString("street", ""),
                     cityStateZip = obj.optString("cityStateZip", ""),
                     gateCode = obj.optString("gateCode", "").ifEmpty { null },
+                    label = obj.optString("label", "").ifEmpty { null },
+                    addressType = obj.optString("addressType", "").ifEmpty { null },
+                    deliveryPreference = obj.optString("deliveryPreference", "").ifEmpty { null },
+                    deliveryInstructions = obj.optString("deliveryInstructions", "").ifEmpty { null },
+                    isGifting = obj.optBoolean("isGifting", false),
                     isDefault = obj.optBoolean("isDefault", false),
                     latitude = obj.optDouble("latitude", 0.0),
                     longitude = obj.optDouble("longitude", 0.0)

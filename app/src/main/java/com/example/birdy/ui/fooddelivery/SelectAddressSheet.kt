@@ -1,6 +1,7 @@
 package com.example.birdy.ui.fooddelivery
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,14 +20,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
+import androidx.compose.material.icons.filled.Apartment
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Hotel
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -66,6 +73,11 @@ data class Address(
     val street: String,
     val cityStateZip: String,
     val gateCode: String? = null,
+    val label: String? = null,
+    val addressType: String? = null,
+    val deliveryPreference: String? = null,
+    val deliveryInstructions: String? = null,
+    val isGifting: Boolean = false,
     val isDefault: Boolean = false,
     val latitude: Double = 0.0,
     val longitude: Double = 0.0
@@ -96,6 +108,16 @@ fun SelectAddressSheet(
     var isAddingNewAddress by remember { mutableStateOf(false) }
     var showAddressSearch by remember { mutableStateOf(false) }
     var pendingAddressData by remember { mutableStateOf<AddressSearchResult?>(null) }
+
+    // New-address options state (type + details)
+    var showAddressTypeSheet by remember { mutableStateOf(false) }
+    var selectedAddressType by remember { mutableStateOf("house") }
+    var showAddressDetailsSheet by remember { mutableStateOf(false) }
+    var deliveryPreference by remember { mutableStateOf("leave_at_door") }
+    var deliveryInstructions by remember { mutableStateOf("") }
+    var personalLabel by remember { mutableStateOf("none") }
+    var customLabel by remember { mutableStateOf("") }
+    var isGifting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     // Addresses fetched from API
@@ -217,6 +239,7 @@ fun SelectAddressSheet(
                         title = address.street,
                         subtitle = address.cityStateZip,
                         icon = if (address.isDefault) Icons.Default.Star else Icons.Default.LocationOn,
+                        label = address.label,
                         gateCode = address.gateCode,
                         isSelected = selectedId == address.id,
                         onClick = {
@@ -246,6 +269,12 @@ fun SelectAddressSheet(
                             isAddingNewAddress = true
                             gateCodeInput = ""
                             editingAddressId = null
+                            selectedAddressType = "house"
+                            deliveryPreference = "leave_at_door"
+                            deliveryInstructions = ""
+                            personalLabel = "none"
+                            customLabel = ""
+                            isGifting = false
                             showAddressSearch = true
                         }
                         .padding(vertical = 12.dp),
@@ -290,7 +319,13 @@ fun SelectAddressSheet(
                                     AddressService.createAddress(
                                         data.street, data.cityStateZip,
                                         data.latitude, data.longitude,
-                                        code.ifEmpty { null }, token
+                                        code.ifEmpty { null },
+                                        if (personalLabel == "custom") customLabel.ifBlank { "custom" } else (if (personalLabel == "none") null else personalLabel),
+                                        selectedAddressType,
+                                        deliveryPreference,
+                                        deliveryInstructions,
+                                        isGifting,
+                                        token
                                     )
                                 }
                                 if (created != null) {
@@ -334,8 +369,513 @@ fun SelectAddressSheet(
             onAddressSelected = { street, cityStateZip, lat, lng ->
                 showAddressSearch = false
                 pendingAddressData = AddressSearchResult(street, cityStateZip, lat, lng)
-                showGateCodeSheet = true
+                selectedAddressType = "house"
+                deliveryPreference = "leave_at_door"
+                deliveryInstructions = ""
+                personalLabel = "none"
+                customLabel = ""
+                isGifting = false
+                showAddressTypeSheet = true
             }
+        )
+    }
+
+    // MARK: - Address Type Sheet
+    if (showAddressTypeSheet) {
+        AddressTypeSheet(
+            selectedType = selectedAddressType,
+            onSelect = { selectedAddressType = it },
+            address = pendingAddressData?.street ?: "",
+            onNext = {
+                showAddressTypeSheet = false
+                showAddressDetailsSheet = true
+            },
+            onCancel = {
+                showAddressTypeSheet = false
+                pendingAddressData = null
+            }
+        )
+    }
+
+    // MARK: - Address Details Sheet
+    if (showAddressDetailsSheet) {
+        AddressDetailsSheet(
+            address = pendingAddressData?.street ?: "",
+            deliveryPreference = deliveryPreference,
+            onPreferenceChange = { deliveryPreference = it },
+            deliveryInstructions = deliveryInstructions,
+            onInstructionsChange = { deliveryInstructions = it },
+            personalLabel = personalLabel,
+            onLabelChange = { personalLabel = it },
+            customLabel = customLabel,
+            onCustomLabelChange = { customLabel = it },
+            isGifting = isGifting,
+            onGiftingChange = { isGifting = it },
+            onNext = {
+                showAddressDetailsSheet = false
+                showGateCodeSheet = true
+            },
+            onBack = {
+                showAddressDetailsSheet = false
+                showAddressTypeSheet = true
+            },
+            onCancel = {
+                showAddressDetailsSheet = false
+                pendingAddressData = null
+            }
+        )
+    }
+}
+
+// MARK: - Address Type Sheet (matches iOS AddressTypeSheet)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddressTypeSheet(
+    selectedType: String,
+    onSelect: (String) -> Unit,
+    address: String,
+    onNext: () -> Unit,
+    onCancel: () -> Unit
+) {
+    val types = listOf(
+        Triple("house", "House", Icons.Default.Home),
+        Triple("apartment", "Apartment", Icons.Default.Apartment),
+        Triple("hotel", "Hotel", Icons.Default.Hotel),
+        Triple("office", "Office", Icons.Default.Business),
+        Triple("other", "Other", Icons.Default.LocationOn)
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onCancel,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White)
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            // Handle bar
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .width(40.dp)
+                    .height(5.dp)
+                    .background(Color(0xFFD1D1D1), RoundedCornerShape(3.dp))
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Title
+            Text(
+                text = "Address type",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+            if (address.isNotEmpty()) {
+                Text(
+                    text = address,
+                    fontSize = 13.sp,
+                    color = Color.Black,
+                    maxLines = 1,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Type grid: 2 columns (last item spans full width)
+            types.chunked(2).forEach { rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    rowItems.forEach { (id, label, icon) ->
+                        AddressTypeOption(
+                            id = id,
+                            label = label,
+                            icon = icon,
+                            selected = selectedType == id,
+                            onClick = { onSelect(id) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    if (rowItems.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // Next
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .background(Color(0xFFCC5500), RoundedCornerShape(12.dp))
+                    .clickable { onNext() },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "Next",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Cancel
+            TextButton(onClick = onCancel) {
+                Text(
+                    text = "Cancel",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.Black
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun AddressTypeOption(
+    id: String,
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .height(84.dp)
+            .background(
+                if (selected) Color(0xFFCC5500).copy(alpha = 0.1f) else Color(0xFFF3F3F3),
+                RoundedCornerShape(14.dp)
+            )
+            .border(
+                width = 2.dp,
+                color = if (selected) Color(0xFFCC5500) else Color.Transparent,
+                shape = RoundedCornerShape(14.dp)
+            )
+            .clickable { onClick() },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (selected) Color(0xFFCC5500) else Color.Gray,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.Black
+        )
+    }
+}
+
+// MARK: - Address Details Sheet (matches iOS AddressDetailsSheet)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddressDetailsSheet(
+    address: String,
+    deliveryPreference: String,
+    onPreferenceChange: (String) -> Unit,
+    deliveryInstructions: String,
+    onInstructionsChange: (String) -> Unit,
+    personalLabel: String,
+    onLabelChange: (String) -> Unit,
+    customLabel: String,
+    onCustomLabelChange: (String) -> Unit,
+    isGifting: Boolean,
+    onGiftingChange: (Boolean) -> Unit,
+    onNext: () -> Unit,
+    onBack: () -> Unit,
+    onCancel: () -> Unit
+) {
+    val labels = listOf("none", "home", "work", "custom")
+
+    ModalBottomSheet(
+        onDismissRequest = onCancel,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White)
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            // Handle bar
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .width(40.dp)
+                    .height(5.dp)
+                    .background(Color(0xFFD1D1D1), RoundedCornerShape(3.dp))
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Title
+            Text(
+                text = "Address details",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+            if (address.isNotEmpty()) {
+                Text(
+                    text = address,
+                    fontSize = 13.sp,
+                    color = Color.Black,
+                    maxLines = 1,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Delivery preference
+            Text(
+                text = "Delivery preference",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            PreferenceRow(
+                title = "Leave at door",
+                icon = Icons.Default.Home,
+                selected = deliveryPreference == "leave_at_door",
+                onClick = { onPreferenceChange("leave_at_door") }
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            PreferenceRow(
+                title = "Meet at location",
+                icon = Icons.Default.LocationOn,
+                selected = deliveryPreference == "meet_at_location",
+                onClick = { onPreferenceChange("meet_at_location") }
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Delivery instructions
+            Text(
+                text = "Delivery instructions",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = deliveryInstructions,
+                onValueChange = onInstructionsChange,
+                placeholder = {
+                    Text(
+                        text = "e.g. ring the bell after dropoff, leave next to the porch, call upon arrival",
+                        color = Color.Black,
+                        fontSize = 13.sp
+                    )
+                },
+                minLines = 3,
+                maxLines = 6,
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color(0xFFCC5500),
+                    unfocusedBorderColor = Color(0xFFE0E0E0),
+                    focusedContainerColor = Color(0xFFF5F5F5),
+                    unfocusedContainerColor = Color(0xFFF5F5F5),
+                    cursorColor = Color(0xFFCC5500)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            )
+            Text(
+                text = "Do not add order changes or requests here.",
+                fontSize = 11.sp,
+                color = Color.Gray
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Personal label
+            Text(
+                text = "Personal label",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                labels.forEach { label ->
+                    val selected = personalLabel == label
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                if (selected) Color(0xFF555555) else Color(0xFFF3F3F3),
+                                RoundedCornerShape(20.dp)
+                            )
+                            .clickable { onLabelChange(label) }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label.replaceFirstChar { it.uppercase() },
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (selected) Color.White else Color.Black
+                        )
+                    }
+                }
+            }
+            if (personalLabel == "custom") {
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = customLabel,
+                    onValueChange = onCustomLabelChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = { Text("e.g. hotel, office, gym", fontSize = 14.sp) },
+                    singleLine = true
+                )
+            }
+            Text(
+                text = "Only you can see this.",
+                fontSize = 11.sp,
+                color = Color.Gray
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Gifting
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF3F3F3), RoundedCornerShape(12.dp))
+                    .clickable { onGiftingChange(!isGifting) }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = isGifting,
+                    onCheckedChange = { onGiftingChange(it) },
+                    colors = androidx.compose.material3.CheckboxDefaults.colors(
+                        checkedColor = Color(0xFFCC5500)
+                    )
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                    Text(
+                        text = "I'm sending a gift",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Text(
+                        text = "Add a card and note at checkout",
+                        fontSize = 11.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Next
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .background(Color(0xFFCC5500), RoundedCornerShape(12.dp))
+                    .clickable { onNext() },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "Next",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Back
+            TextButton(onClick = onBack) {
+                Text(
+                    text = "Back",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.Black
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun PreferenceRow(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (selected) Color(0xFFCC5500).copy(alpha = 0.1f) else Color(0xFFF3F3F3),
+                RoundedCornerShape(12.dp)
+            )
+            .border(
+                width = 2.dp,
+                color = if (selected) Color(0xFFCC5500) else Color.Transparent,
+                shape = RoundedCornerShape(12.dp)
+            )
+            .clickable { onClick() }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (selected) Color(0xFFCC5500) else Color.Gray,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = title,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.Black,
+            modifier = Modifier.weight(1f)
+        )
+        Icon(
+            imageVector = if (selected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+            contentDescription = null,
+            tint = if (selected) Color(0xFFCC5500) else Color(0xFFD1D1D1),
+            modifier = Modifier.size(18.dp)
         )
     }
 }
@@ -520,6 +1060,7 @@ private fun AddressSelectionRow(
     title: String,
     subtitle: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String? = null,
     gateCode: String? = null,
     isSelected: Boolean,
     onClick: () -> Unit,
@@ -563,6 +1104,17 @@ private fun AddressSelectionRow(
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
                 )
+                if (!label.isNullOrEmpty() && label != "none") {
+                    Text(
+                        text = label.uppercase(),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFFFF6B00),
+                        modifier = Modifier
+                            .background(Color(0xFFFFE9D6), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
                 Text(
                     text = subtitle,
                     fontSize = 14.sp,

@@ -1,3 +1,9 @@
+
+also once the information for new address is submitted, it doesnt save the address ?
+but the newly added address doesnt show up on the addres selection page. 
+
+======
+
 >. on the hoem page when user clicks the wings icon it goes to taghome page and on this page you can find the Buffalo wild wings and when user clicks it calls an endpiont that gives the list of menu items but the problem is that under each category the number of items are very less , when they should be a lot more. heres the log for the similar store page on the identical ios app. [Brand] /nearest-store HTTP 200 for brand 6a3b1c1eaa663cfb6fc79b95
 [Brand] Response (1253 bytes): {"brand":{"bannerUrl":"https://storage.googleapis.com/birdyimages/brands%2Fbrand_carousel_6a3b1c1eaa663cfb6fc79b95_6a3ea961b18c75b59cb5f6a0_BBB111110-2.png.png","brandType":"restaurant","carouselImages":["https://storage.googleapis.com/birdyimages/brands%2Fbrand_carousel_6a3b1c1eaa663cfb6fc79b95_6a3ea961b18c75b59cb5f6a0_BBB111110-2.png.png","https://storage.googleapis.com/birdyimages/brands%2Fbrand_carousel_6a3b1c1eaa663cfb6fc79b95_6a3e917eaa0588a754bc2e9f_Bbanner-2-3000x1000-c.jpg.jpg","https://storage.googleapis.com/birdyimages/brands%2Fbrand_carousel_6a3b1c1eaa663cfb6fc79b95_6a3b208fb6661dcb38071f22_2026-05-20_15-11-12_UTC.jpg.jpg","https://storage.googleapis.com/birdyimages/brands%2Fbrand_carousel_6a3b1c1eaa663cfb6fc79b95_6a3e917daa0588a754bc2e9e_B1478106206-banner.jpg.jpg","https://storage.googleapis.com/birdyimages/brands%2Fbrand_carousel_6a3b1c1eaa663cfb6fc79b95_6a3ea961b18c75b59cb5f69e_baa.jpg.jpg"],"description":"","id":"6a3b1c1eaa663cfb6fc79b95","logoUrl":"https://storage.googleapis.com/birdyimages/brands%2Fbrand_6a3b1c1eaa663cfb6fc79b95_6a3b208ab6661dcb38071f20.png","name":"Buffalo Wild Wings","tags":["wings","chicken","pizza"],"videoUrl":""},"locations":[],"menu":{"categories":[],"modifierGroups":[]},"nearestStore":null}
 
