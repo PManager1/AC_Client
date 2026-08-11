@@ -449,6 +449,7 @@ private fun AddressTypeSheet(
     ModalBottomSheet(
         onDismissRequest = onCancel,
         containerColor = Color.White,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
     ) {
         Column(
@@ -612,6 +613,7 @@ private fun AddressDetailsSheet(
     ModalBottomSheet(
         onDismissRequest = onCancel,
         containerColor = Color.White,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
     ) {
         Column(
