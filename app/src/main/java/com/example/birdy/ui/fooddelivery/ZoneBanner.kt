@@ -12,6 +12,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -63,7 +64,13 @@ fun ZoneBanner(
                 ) {
                     Text("Got it")
                 }
-            } else {
+                 TextButton(
+                     onClick = onDismiss,
+                     modifier = Modifier.align(Alignment.End).padding(top = 8.dp)
+                 ) {
+                     Text("Dismiss", color = Color(0xFF1976D2))
+                 }
+                 } else {
                 Text(
                     "We aren't in your neighborhood yet, but we're moving fast.",
                     fontWeight = FontWeight.Bold,
@@ -117,12 +124,24 @@ fun ZoneBanner(
                     )
                 }
 
-                Button(
-                    onClick = { onSubmit(email, phone); submitted = true },
-                    enabled = email.isNotEmpty() || phone.isNotEmpty(),
-                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 12.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
                 ) {
-                    Text("Notify Me")
+                    Button(
+                        onClick = { onSubmit(email, phone); submitted = true },
+                        enabled = email.isNotEmpty() || phone.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Notify Me")
+                    }
+                    TextButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Dismiss")
+                    }
                 }
             }
         }
