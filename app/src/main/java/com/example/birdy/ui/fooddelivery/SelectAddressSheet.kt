@@ -338,6 +338,9 @@ fun SelectAddressSheet(
                                     )
                                 }
                                 if (created != null) {
+                                    withContext(Dispatchers.IO) {
+                                        AddressService.setDefaultAddress(created.id, token)
+                                    }
                                     errorMessage = null
                                     localAddresses.add(created)
                                     onAddressSelected(created)
