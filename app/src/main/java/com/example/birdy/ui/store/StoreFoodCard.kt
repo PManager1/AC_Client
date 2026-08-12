@@ -42,7 +42,8 @@ fun StoreFoodCard(
     menuItem: StoreMenuItem,
     restaurantName: String,
     onItemTap: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    descriptionColor: Color = Color.Gray
 ) {
     val cartQuantity = CartManager.items
         .filter { it.dishName == menuItem.name }
@@ -249,7 +250,7 @@ fun StoreFoodCard(
             Text(
                 text = menuItem.description,
                 fontSize = 12.sp,
-                color = Color.Gray,
+                color = descriptionColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.clickable { onItemTap() }

@@ -1,5 +1,9 @@
 package com.example.birdy.ui.store
 
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +18,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -92,50 +99,7 @@ fun GStoreScreen(
     Box(modifier = Modifier.fillMaxSize()) {
         when {
             isLoading -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.White)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    ShimmerBox(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(240.dp)
-                    )
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(Color.White)
-                            .padding(horizontal = 16.dp)
-                    ) {
-                        Box(modifier = Modifier.offset(y = (-40).dp)) {
-                            ShimmerBox(
-                                modifier = Modifier
-                                    .size(84.dp)
-                                    .clip(CircleShape)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height((-30).dp))
-                        Column(
-                            modifier = Modifier.padding(top = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ShimmerBox(
-                                modifier = Modifier
-                                    .height(22.dp)
-                                    .fillMaxWidth(0.7f)
-                                    .clip(RoundedCornerShape(6.dp))
-                            )
-                            ShimmerBox(
-                                modifier = Modifier
-                                    .height(14.dp)
-                                    .fillMaxWidth(0.5f)
-                                    .clip(RoundedCornerShape(4.dp))
-                            )
-                        }
-                    }
-                }
+                GrocerySkeletonLoading()
             }
 
             errorMessage != null -> {
@@ -388,7 +352,8 @@ fun GStoreScreen(
                                                         menuItem = item,
                                                         restaurantName = data.brand_info.name,
                                                         onItemTap = { },
-                                                        modifier = Modifier.weight(1f)
+                                                        modifier = Modifier.weight(1f),
+                                                        descriptionColor = Color.Black
                                                     )
                                                 }
                                                 if (rowItems.size == 1) {
@@ -594,4 +559,273 @@ private fun parseAisles(root: JSONObject?): List<GroceryAisle> {
         result.add(GroceryAisle(category = category, items = items))
     }
     return result
+}
+
+// MARK: - Fancy Skeleton Loading Waves for Grocery Stores
+@Composable
+fun GrocerySkeletonLoading() {
+    val transition = rememberInfiniteTransition(label = "skeletonWaves")
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+    ) {
+        // Banner skeleton with wave animation
+        val bannerWave1 by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1000f,
+            animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 0)),
+            label = "bannerWave1"
+        )
+        val bannerWave2 by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1000f,
+            animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 300)),
+            label = "bannerWave2"
+        )
+        val bannerWave3 by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1000f,
+            animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 600)),
+            label = "bannerWave3"
+        )
+        
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(240.dp)
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFFF5F5F5),
+                            Color(0xFFE8E8E8),
+                            Color(0xFFF5F5F5)
+                        ),
+                        start = Offset(bannerWave1 - 200f, bannerWave1 - 200f),
+                        end = Offset(bannerWave1, bannerWave1)
+                    )
+                )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.05f),
+                                Color.Transparent
+                            )
+                        )
+                    )
+            )
+        }
+
+        // Main content area
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White)
+                .padding(horizontal = 16.dp)
+        ) {
+            // Logo circle with wave animation
+            val logoWave by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1000f,
+                animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 200)),
+                label = "logoWave"
+            )
+            
+            Box(modifier = Modifier.offset(y = (-40).dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(84.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFF0F0F0),
+                                    Color(0xFFE0E0E0),
+                                    Color(0xFFF0F0F0)
+                                ),
+                                start = Offset(logoWave - 200f, logoWave - 200f),
+                                end = Offset(logoWave, logoWave)
+                            )
+                        )
+                )
+            }
+            
+            Spacer(modifier = Modifier.height((-30).dp))
+            
+            // Title and subtitle with wave animations
+            val titleWave by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1000f,
+                animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 400)),
+                label = "titleWave"
+            )
+            val subtitleWave by transition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1000f,
+                animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 700)),
+                label = "subtitleWave"
+            )
+            
+            Column(
+                modifier = Modifier.padding(top = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .height(24.dp)
+                        .fillMaxWidth(0.65f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFF5F5F5),
+                                    Color(0xFFE5E5E5),
+                                    Color(0xFFF5F5F5)
+                                ),
+                                start = Offset(titleWave - 200f, titleWave - 200f),
+                                end = Offset(titleWave, titleWave)
+                            )
+                        )
+                )
+                Box(
+                    modifier = Modifier
+                        .height(16.dp)
+                        .fillMaxWidth(0.45f)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFF5F5F5),
+                                    Color(0xFFE8E8E8),
+                                    Color(0xFFF5F5F5)
+                                ),
+                                start = Offset(subtitleWave - 200f, subtitleWave - 200f),
+                                end = Offset(subtitleWave, subtitleWave)
+                            )
+                        )
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            // Menu categories with staggered wave animations
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
+            ) {
+                items(4) { index ->
+                    val categoryWave by transition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = 1000f,
+                        animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = (900 + index * 200).toInt())),
+                        label = "categoryWave$index"
+                    )
+                    
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        // Category title
+                        Box(
+                            modifier = Modifier
+                                .height(20.dp)
+                                .width(140.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            Color(0xFFF5F5F5),
+                                            Color(0xFFE8E8E8),
+                                            Color(0xFFF5F5F5)
+                                        ),
+                                        start = Offset(categoryWave - 200f, categoryWave - 200f),
+                                        end = Offset(categoryWave, categoryWave)
+                                    )
+                                )
+                        )
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // Food card placeholders in grid
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            repeat(2) { cardIndex ->
+                                val cardWave by transition.animateFloat(
+                                    initialValue = 0f,
+                                    targetValue = 1000f,
+                                    animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = (1100 + index * 200 + cardIndex * 100).toInt())),
+                                    label = "cardWave${index}_${cardIndex}"
+                                )
+                                
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Card image
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(130.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                Brush.linearGradient(
+                                                    colors = listOf(
+                                                        Color(0xFFF5F5F5),
+                                                        Color(0xFFE8E8E8),
+                                                        Color(0xFFF5F5F5)
+                                                    ),
+                                                    start = Offset(cardWave - 200f, cardWave - 200f),
+                                                    end = Offset(cardWave, cardWave)
+                                                )
+                                            )
+                                    )
+                                    // Card title
+                                    Box(
+                                        modifier = Modifier
+                                            .height(14.dp)
+                                            .fillMaxWidth(0.7f)
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .background(
+                                                Brush.linearGradient(
+                                                    colors = listOf(
+                                                        Color(0xFFF5F5F5),
+                                                        Color(0xFFE8E8E8),
+                                                        Color(0xFFF5F5F5)
+                                                    ),
+                                                    start = Offset(cardWave - 200f, cardWave - 200f),
+                                                    end = Offset(cardWave, cardWave)
+                                                )
+                                            )
+                                    )
+                                    // Card price
+                                    Box(
+                                        modifier = Modifier
+                                            .height(12.dp)
+                                            .width(40.dp)
+                                            .clip(RoundedCornerShape(3.dp))
+                                            .background(
+                                                Brush.linearGradient(
+                                                    colors = listOf(
+                                                        Color(0xFFF5F5F5),
+                                                        Color(0xFFE8E8E8),
+                                                        Color(0xFFF5F5F5)
+                                                    ),
+                                                    start = Offset(cardWave - 200f, cardWave - 200f),
+                                                    end = Offset(cardWave, cardWave)
+                                                )
+                                            )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
