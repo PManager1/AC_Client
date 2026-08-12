@@ -43,6 +43,7 @@ import com.example.birdy.ui.explore.NewFoodPlacesScreen
 import com.example.birdy.ui.explore.SearchFoodScreen
 import com.example.birdy.ui.explore.SeaMoreScreen
 import com.example.birdy.ui.store.StoreScreen
+import com.example.birdy.ui.store.GStoreScreen
 import com.example.birdy.ui.explore.CartScreen
 import com.example.birdy.ui.explore.CheckoutScreen
 import com.example.birdy.ui.explore.DriverTrackingScreen
@@ -185,6 +186,7 @@ fun BirdyAppContent() {
     var showSearchFood by remember { mutableStateOf(false) }
     var showFoodPlaces by remember { mutableStateOf(false) }
     var showStore by remember { mutableStateOf(false) }
+    var showGStore by remember { mutableStateOf(false) }
     var selectedRestaurantId by remember { mutableStateOf("") }
     var selectedStoreName by remember { mutableStateOf("") }
     var selectedIsGrocery by remember { mutableStateOf(false) }
@@ -228,6 +230,7 @@ fun BirdyAppContent() {
                         showSearchFood = false
                         showFoodPlaces = false
                         showStore = false
+                        showGStore = false
                         selectedCategory = null
                         showTagHome = false
                         showSeaMore = false
@@ -302,6 +305,13 @@ fun BirdyAppContent() {
                                     jsonInputStream = if (selectedRestaurantId.isEmpty()) context.assets.open("storejson.json") else null
                                 )
                             }
+                            showGStore -> {
+                                GStoreScreen(
+                                    onBack = { showGStore = false },
+                                    onViewCart = { showCart = true },
+                                    restaurantId = selectedRestaurantId
+                                )
+                            }
                             else -> {
                                 HomeFDScreen(
                                     onNavigateToSearch = {
@@ -320,7 +330,7 @@ fun BirdyAppContent() {
                                         selectedRestaurantId = storeId
                                         selectedStoreName = storeName
                                         selectedIsGrocery = true
-                                        showStore = true
+                                        showGStore = true
                                     },
                                      onCategoryClick = { categoryName ->
                                         when (categoryName) {
@@ -379,6 +389,13 @@ fun BirdyAppContent() {
                                     restaurantId = selectedRestaurantId,
                                     isGrocery = selectedIsGrocery,
                                     jsonInputStream = if (selectedRestaurantId.isEmpty()) context.assets.open("storejson.json") else null
+                                )
+                            }
+                            showGStore -> {
+                                GStoreScreen(
+                                    onBack = { showGStore = false },
+                                    onViewCart = { showCart = true },
+                                    restaurantId = selectedRestaurantId
                                 )
                             }
                             showSeaMore -> {
