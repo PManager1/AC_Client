@@ -102,6 +102,20 @@ fun StoreFoodCard(
                 }
             )
 
+            if (cartQuantity > 0) {
+                Text(
+                    text = "In cart",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF2E7D32),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .background(Color(0xFF4CAF50).copy(alpha = 0.12f), RoundedCornerShape(50))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+
             if (hasModifiers) {
                 // Show "Add" button that opens detail sheet
                 if (cartQuantity == 0) {

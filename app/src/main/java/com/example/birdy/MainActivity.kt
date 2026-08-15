@@ -44,6 +44,10 @@ import com.example.birdy.ui.explore.SearchFoodScreen
 import com.example.birdy.ui.explore.SeaMoreScreen
 import com.example.birdy.ui.store.StoreScreen
 import com.example.birdy.ui.store.GStoreScreen
+import com.example.birdy.ui.store.StoreSearchScreen
+import com.example.birdy.ui.store.AislePageScreen
+import com.example.birdy.ui.store.StoreData
+import com.example.birdy.ui.store.StoreMenuCategory
 import com.example.birdy.ui.explore.CartScreen
 import com.example.birdy.ui.explore.CheckoutScreen
 import com.example.birdy.ui.explore.DriverTrackingScreen
@@ -187,6 +191,10 @@ fun BirdyAppContent() {
     var showFoodPlaces by remember { mutableStateOf(false) }
     var showStore by remember { mutableStateOf(false) }
     var showGStore by remember { mutableStateOf(false) }
+    var showStoreSearch by remember { mutableStateOf(false) }
+    var showAislePage by remember { mutableStateOf(false) }
+    var selectedStoreData by remember { mutableStateOf<StoreData?>(null) }
+    var selectedStoreCategory by remember { mutableStateOf<StoreMenuCategory?>(null) }
     var selectedRestaurantId by remember { mutableStateOf("") }
     var selectedStoreName by remember { mutableStateOf("") }
     var selectedIsGrocery by remember { mutableStateOf(false) }
@@ -231,6 +239,10 @@ fun BirdyAppContent() {
                         showFoodPlaces = false
                         showStore = false
                         showGStore = false
+                        showStoreSearch = false
+                        showAislePage = false
+                        selectedStoreData = null
+                        selectedStoreCategory = null
                         selectedCategory = null
                         showTagHome = false
                         showSeaMore = false
@@ -305,11 +317,46 @@ fun BirdyAppContent() {
                                     jsonInputStream = if (selectedRestaurantId.isEmpty()) context.assets.open("storejson.json") else null
                                 )
                             }
+                            showStoreSearch -> {
+                                val sd = selectedStoreData
+                                if (sd != null) {
+                                    StoreSearchScreen(
+                                        storeId = sd.restaurant_id,
+                                        storeName = sd.brand_info.name,
+                                        categories = sd.menu,
+                                        onBack = { showStoreSearch = false },
+                                        onCategoryClick = { category ->
+                                            selectedStoreCategory = category
+                                            showStoreSearch = false
+                                            showAislePage = true
+                                        }
+                                    )
+                                }
+                            }
+                            showAislePage -> {
+                                val sd = selectedStoreData
+                                val cat = selectedStoreCategory
+                                if (sd != null && cat != null) {
+                                    AislePageScreen(
+                                        category = cat,
+                                        restaurantName = sd.brand_info.name,
+                                        restaurantId = sd.restaurant_id,
+                                        onBack = {
+                                            showAislePage = false
+                                            showStoreSearch = true
+                                        }
+                                    )
+                                }
+                            }
                             showGStore -> {
                                 GStoreScreen(
                                     onBack = { showGStore = false },
                                     onViewCart = { showCart = true },
-                                    restaurantId = selectedRestaurantId
+                                    restaurantId = selectedRestaurantId,
+                                    onSearch = { data ->
+                                        selectedStoreData = data
+                                        showStoreSearch = true
+                                    }
                                 )
                             }
                             else -> {
@@ -391,11 +438,46 @@ fun BirdyAppContent() {
                                     jsonInputStream = if (selectedRestaurantId.isEmpty()) context.assets.open("storejson.json") else null
                                 )
                             }
+                            showStoreSearch -> {
+                                val sd = selectedStoreData
+                                if (sd != null) {
+                                    StoreSearchScreen(
+                                        storeId = sd.restaurant_id,
+                                        storeName = sd.brand_info.name,
+                                        categories = sd.menu,
+                                        onBack = { showStoreSearch = false },
+                                        onCategoryClick = { category ->
+                                            selectedStoreCategory = category
+                                            showStoreSearch = false
+                                            showAislePage = true
+                                        }
+                                    )
+                                }
+                            }
+                            showAislePage -> {
+                                val sd = selectedStoreData
+                                val cat = selectedStoreCategory
+                                if (sd != null && cat != null) {
+                                    AislePageScreen(
+                                        category = cat,
+                                        restaurantName = sd.brand_info.name,
+                                        restaurantId = sd.restaurant_id,
+                                        onBack = {
+                                            showAislePage = false
+                                            showStoreSearch = true
+                                        }
+                                    )
+                                }
+                            }
                             showGStore -> {
                                 GStoreScreen(
                                     onBack = { showGStore = false },
                                     onViewCart = { showCart = true },
-                                    restaurantId = selectedRestaurantId
+                                    restaurantId = selectedRestaurantId,
+                                    onSearch = { data ->
+                                        selectedStoreData = data
+                                        showStoreSearch = true
+                                    }
                                 )
                             }
                             showSeaMore -> {

@@ -82,7 +82,8 @@ data class GroceryAisle(
 fun GStoreScreen(
     onBack: () -> Unit,
     onViewCart: () -> Unit,
-    restaurantId: String
+    restaurantId: String,
+    onSearch: (StoreData) -> Unit = {}
 ) {
     var storeData by remember { mutableStateOf<StoreData?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -218,7 +219,7 @@ fun GStoreScreen(
                             ) {
                                 HeaderCircleButton(icon = Icons.AutoMirrored.Filled.ArrowBack, onClick = onBack)
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    HeaderCircleButton(icon = Icons.Default.Search) {}
+                                    HeaderCircleButton(icon = Icons.Default.Search, onClick = { onSearch(data) })
                                     HeaderCircleButton(icon = Icons.Default.MoreVert) {}
                                 }
                             }
