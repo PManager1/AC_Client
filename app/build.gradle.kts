@@ -73,6 +73,12 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
 
+    // CameraX — live camera preview + capture (1099 photo verification)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+
     // ViewModel Compose (for viewModel() in composables)
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
 

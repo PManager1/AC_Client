@@ -78,7 +78,7 @@ private val OrangeSec3 = Color(0xFFFF9500)
 enum class AccountPage {
     Main, Help, Wallet, Pass, ManageAccount, SignIn, SignOut, DeleteAccount, Profile,
     Settings, Referral, ReferralCode, Notifications, Language, BugReporter,
-    TestPages, ChatView, NewHomeBatch, NewDriver, NewDriverDetail, StorePage, VerifyOtp
+    TestPages, Takepic, ChatView, NewHomeBatch, NewDriver, NewDriverDetail, StorePage, VerifyOtp
 }
 
 // Matches iOS Account.swift
@@ -167,9 +167,13 @@ fun AccountScreen(
         )
         AccountPage.TestPages -> TestPagesScreen(
             onBack = { currentPage = AccountPage.Main },
+            onNavigateToTakepic = { currentPage = AccountPage.Takepic },
             onNavigateToChatView = { currentPage = AccountPage.ChatView },
             onNavigateToNewHomeBatch = { currentPage = AccountPage.NewHomeBatch },
             onNavigateToNewDriver = { currentPage = AccountPage.NewDriver }
+        )
+        AccountPage.Takepic -> TakepicScreen(
+            onBack = { currentPage = AccountPage.TestPages }
         )
         AccountPage.ChatView -> ChatScreen(
             onBack = { currentPage = AccountPage.TestPages }

@@ -31,5 +31,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Birdy"
+rootProject.name = "U-DO"
 include(":app")

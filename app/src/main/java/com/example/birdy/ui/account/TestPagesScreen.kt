@@ -46,6 +46,7 @@ private val OrangeSec2 = Color(0xFF8E8E93)
 @Composable
 fun TestPagesScreen(
     onBack: () -> Unit = {},
+    onNavigateToTakepic: () -> Unit = {},
     onNavigateToChatView: () -> Unit = {},
     onNavigateToNewHomeBatch: () -> Unit = {},
     onNavigateToNewDriver: () -> Unit = {}
@@ -92,7 +93,13 @@ fun TestPagesScreen(
                 .padding(horizontal = 16.dp)
         ) {
             Column {
-                // ChatView — at the top, matches iOS SettingsView
+                // Takepic — at the top, above ChatView
+                TestPageRow(
+                    title = "Takepic",
+                    showDivider = true,
+                    onClick = onNavigateToTakepic
+                )
+                // ChatView — matches iOS SettingsView
                 TestPageRow(
                     title = "ChatView",
                     showDivider = true,
