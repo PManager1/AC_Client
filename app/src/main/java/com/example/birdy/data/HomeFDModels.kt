@@ -35,6 +35,13 @@ data class HomeFeedData(
     val sections: List<FeedSection>
 )
 
+enum class HomeFeedStatus { SUCCESS, AUTH_ERROR, NETWORK_ERROR }
+
+data class HomeFeedResult(
+    val status: HomeFeedStatus,
+    val data: HomeFeedData?
+)
+
 data class FeaturedBanner(
     val id: String,
     val title: String,
@@ -213,6 +220,75 @@ object HomeFDData {
     // Flat list of all categories (Food only, for backward compatibility)
     val categories = mainCategories.first { it.name == "Food" }.subcategories
 
+    // MARK: - Auth helpers
+
+    /**
+     * Ensures a bearer token is available. If one is missing or blank, attempts a guest
+     * (demo) login and persists the returned token — mirrors iOS handleDemoLogin().
+     * Best-effort: on failure it returns false and does not throw, so callers keep their
+     * existing fallback behavior.
+     */
+    fun ensureToken(): Boolean {
+        AuthManager.getToken()?.takeIf { it.isNotBlank() }?.let { return true }
+        return try {
+            val url = URL("$API_BASE_URL/demo-login")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.connectTimeout = 10_000
+            conn.readTimeout = 15_000
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.doOutput = true
+            conn.outputStream.use { it.write("""{"phoneNumber":"6502003406"}""".toByteArray()) }
+            val code = conn.responseCode
+            val body = if (code in 200..299) conn.inputStream.bufferedReader().use { it.readText() }
+                       else conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+            conn.disconnect()
+            if (code in 200..299) {
+                val token = JSONObject(body).optString("token", "")
+                if (token.isNotBlank()) {
+                    AuthManager.setToken(token)
+                    println("✅ [HomeFDData] Guest demo-login succeeded")
+                    true
+                } else {
+                    println("⚠️ [HomeFDData] Demo-login returned no token")
+                    false
+                }
+            } else {
+                println("⚠️ [HomeFDData] Demo-login failed: HTTP $code — $body")
+                false
+            }
+        } catch (e: Exception) {
+            println("❌ [HomeFDData] Demo-login error: ${e.message}")
+            false
+        }
+    }
+
+    /** Response code from an HttpURLConnection, falling back to -1 on failure. */
+    private fun codeOf(conn: HttpURLConnection): Int = try { conn.responseCode } catch (_: Exception) { -1 }
+
+    /** Reads the body whether the response is 2xx or an error — avoids throwing on 401/4xx. */
+    private fun bodyOf(conn: HttpURLConnection): String = try {
+        if (codeOf(conn) in 200..299) {
+            conn.inputStream.bufferedReader().use { it.readText() }
+        } else {
+            conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+        }
+    } catch (e: Exception) {
+        println("❌ [HomeFDData] Failed to read response: ${e.message}")
+        ""
+    }
+
+    /** Opens a GET connection to the given URL, attaching the bearer token (demo-login fallback). */
+    private fun openAuthedGet(urlString: String): HttpURLConnection {
+        if (AuthManager.getToken().isNullOrBlank()) ensureToken()
+        val connection = URL(urlString).openConnection() as HttpURLConnection
+        connection.connectTimeout = 10_000
+        connection.readTimeout = 15_000
+        connection.setRequestProperty("Content-Type", "application/json")
+        AuthManager.getToken()?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
+        return connection
+    }
+
     // MARK: - Load Brands (grocery/convenience/pharmacy) from API
 
     /** Blocking network call — must be called from a background thread */
@@ -222,13 +298,9 @@ object HomeFDData {
             if (lat != null && lng != null) {
                 urlString += "&lat=$lat&lng=$lng&maxDistance=${maxDistance ?: 10}"
             }
-            val url = URL(urlString)
-            val connection = url.openConnection() as java.net.HttpURLConnection
-            connection.connectTimeout = 10_000
-            connection.readTimeout = 15_000
-            connection.setRequestProperty("Content-Type", "application/json")
-            AuthManager.getToken()?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
-            val json = connection.inputStream.bufferedReader().use { it.readText() }
+            val connection = openAuthedGet(urlString)
+            val json = bodyOf(connection)
+            connection.disconnect()
             parseGroceryStores(json)
         } catch (e: Exception) {
             println("❌ [HomeFDData] Failed to fetch /brands: ${e.message}")
@@ -263,12 +335,9 @@ object HomeFDData {
     /** Fetch brands from /brands and filter by any of the given tags. Converts to FeedRestaurant */
     fun fetchTaggedFeedRestaurants(tags: List<String>): List<FeedRestaurant> {
         return try {
-            val url = URL("$API_BASE_URL/brands")
-            val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 10_000
-            connection.readTimeout = 15_000
-            AuthManager.getToken()?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
-            val json = connection.inputStream.bufferedReader().use { it.readText() }
+            val connection = openAuthedGet("$API_BASE_URL/brands")
+            val json = bodyOf(connection)
+            connection.disconnect()
             val array = JSONArray(json)
             (0 until array.length()).mapNotNull { i ->
                 val obj = array.getJSONObject(i)
@@ -315,19 +384,29 @@ object HomeFDData {
 
     // MARK: - Load Home Feed from API
 
-    /** Blocking network call — must be called from a background thread (e.g. IO dispatcher) */
-    fun fetchHomeFeed(): HomeFeedData? {
+    /**
+     * Blocking network call — must be called from a background thread (e.g. IO dispatcher).
+     * Returns a result that distinguishes success, auth failures, and network errors so the
+     * UI can show a meaningful error/retry instead of a silent blank feed.
+     */
+    fun fetchHomeFeed(): HomeFeedResult {
         return try {
-            val url = URL("$API_BASE_URL/homefeed")
-            val connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 10_000
-            connection.readTimeout = 15_000
-            AuthManager.getToken()?.let { connection.setRequestProperty("Authorization", "Bearer $it") }
-            val json = connection.inputStream.bufferedReader().use { it.readText() }
-            parseHomeFeed(json)
+            val connection = openAuthedGet("$API_BASE_URL/homefeed")
+            val code = codeOf(connection)
+            val json = bodyOf(connection)
+            connection.disconnect()
+            if (code == 401 || (code !in 200..299 && json.contains("token", ignoreCase = true))) {
+                println("⚠️ [HomeFDData] /homefeed auth failed: HTTP $code")
+                HomeFeedResult(status = HomeFeedStatus.AUTH_ERROR, data = null)
+            } else if (code !in 200..299) {
+                println("⚠️ [HomeFDData] /homefeed failed: HTTP $code — $json")
+                HomeFeedResult(status = HomeFeedStatus.NETWORK_ERROR, data = null)
+            } else {
+                HomeFeedResult(status = HomeFeedStatus.SUCCESS, data = parseHomeFeed(json))
+            }
         } catch (e: Exception) {
             println("❌ [HomeFDData] Failed to fetch /homefeed: ${e.message}")
-            null
+            HomeFeedResult(status = HomeFeedStatus.NETWORK_ERROR, data = null)
         }
     }
 

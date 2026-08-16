@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -1010,6 +1011,42 @@ fun FeedRestaurantSection(
                     onClick = { onRestaurantClick(restaurant) }
                 )
             }
+        }
+    }
+}
+
+// ============================================================================
+// MARK: - Feed Error Card
+// Shown when the home feed fails to load (auth/network) with a Retry action.
+// ============================================================================
+
+@Composable
+fun FeedErrorCard(
+    message: String,
+    modifier: Modifier = Modifier,
+    onRetry: () -> Unit = {}
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .background(Color(0xFFF7F7F7), RoundedCornerShape(15.dp))
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "😕",
+            fontSize = 40.sp
+        )
+        Text(
+            text = message,
+            fontSize = 14.sp,
+            color = Color.DarkGray,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        Button(onClick = onRetry) {
+            Text(text = "Retry")
         }
     }
 }

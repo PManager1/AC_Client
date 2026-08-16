@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -172,18 +173,38 @@ fun HomeFDScreen(
     // API-driven data
     var homeFeed by remember { mutableStateOf<HomeFeedData?>(null) }
     var isLoadingFeed by remember { mutableStateOf(true) }
+    var feedError by remember { mutableStateOf<String?>(null) }
+    var feedRetryKey by remember { mutableIntStateOf(0) }
 
-    // Fetch home feed from API on appear
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            homeFeed = HomeFDData.fetchHomeFeed()
+    // Shared loader for the home feed — updates loading/error/success state.
+    suspend fun loadHomeFeed() {
+        if (!isLoadingFeed) isLoadingFeed = true
+        val result = withContext(Dispatchers.IO) {
+            HomeFDData.fetchHomeFeed()
+        }
+        when (result.status) {
+            com.example.birdy.data.HomeFeedStatus.SUCCESS -> {
+                homeFeed = result.data
+                feedError = null
+                println("✅ [HomeFDScreen] Loaded home feed: ${result.data?.featuredBanners?.size} banners, ${result.data?.sections?.size} sections")
+            }
+            com.example.birdy.data.HomeFeedStatus.AUTH_ERROR -> {
+                homeFeed = null
+                feedError = "Couldn't load — please sign in and try again."
+                println("⚠️ [HomeFDScreen] Auth error loading home feed")
+            }
+            com.example.birdy.data.HomeFeedStatus.NETWORK_ERROR -> {
+                homeFeed = null
+                feedError = "Couldn't load. Check your connection and try again."
+                println("⚠️ [HomeFDScreen] Network error loading home feed")
+            }
         }
         isLoadingFeed = false
-        if (homeFeed != null) {
-            println("✅ [HomeFDScreen] Loaded home feed: ${homeFeed!!.featuredBanners.size} banners, ${homeFeed!!.sections.size} sections")
-        } else {
-            println("⚠️ [HomeFDScreen] Home feed is null — API fetch may have failed")
-        }
+    }
+
+    // Fetch home feed from API on appear and when retry is requested
+    LaunchedEffect(Unit, feedRetryKey) {
+        loadHomeFeed()
     }
 
     // Load default address on startup (matches iOS loadDefaultAddress)
@@ -249,12 +270,22 @@ fun HomeFDScreen(
         }
     }
 
-    // Auto-refresh data when network connectivity returns
+    // Auto-reload data when connectivity returns after being lost (matches iOS onReachable)
+    var wasOffline by remember { mutableStateOf(false) }
     LaunchedEffect(isNetworkConnected) {
-        if (isNetworkConnected) {
+        if (isNetworkConnected && wasOffline) {
             withContext(Dispatchers.IO) {
-                homeFeed = HomeFDData.fetchHomeFeed()
+                val result = HomeFDData.fetchHomeFeed()
+                if (result.status == com.example.birdy.data.HomeFeedStatus.SUCCESS) {
+                    homeFeed = result.data
+                    feedError = null
+                } else {
+                    feedError = "Couldn't load. Check your connection and try again."
+                }
             }
+            wasOffline = false
+        } else if (!isNetworkConnected) {
+            wasOffline = true
         }
     }
 
@@ -408,6 +439,11 @@ fun HomeFDScreen(
                 if (isLoadingFeed || (selectedMainCategory == "Drinks" && isLoadingDrinkBrands) || (selectedMainCategory == "Food" && isLoadingFoodBrands)) {
                     SkeletonFeedSection(modifier = Modifier.padding(horizontal = 0.dp))
                     SkeletonFeedSection(modifier = Modifier.padding(horizontal = 0.dp))
+                } else if (feedError != null && selectedMainCategory == "All") {
+                    FeedErrorCard(
+                        message = feedError!!,
+                        onRetry = { feedRetryKey++ }
+                    )
                 } else {
                     val sections = when (selectedMainCategory) {
                         "Drinks" -> listOf(
