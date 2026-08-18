@@ -116,9 +116,9 @@ class VerificationViewModel : ViewModel() {
             var success = true
 
             val deferredResults = listOf(
-                async { uploadBitmapToGCS(uiState.value.photos[VerificationStep.FRONT]!!) },
-                async { uploadBitmapToGCS(uiState.value.photos[VerificationStep.LEFT]!!) },
-                async { uploadBitmapToGCS(uiState.value.photos[VerificationStep.RIGHT]!!) }
+                async { uploadBitmapToGCS(uiState.value.photos[VerificationStep.FRONT]!!, VerificationStep.FRONT) },
+                async { uploadBitmapToGCS(uiState.value.photos[VerificationStep.LEFT]!!, VerificationStep.LEFT) },
+                async { uploadBitmapToGCS(uiState.value.photos[VerificationStep.RIGHT]!!, VerificationStep.RIGHT) }
             )
             val results = deferredResults.map { it.await() }
 
@@ -151,12 +151,17 @@ class VerificationViewModel : ViewModel() {
         }
     }
 
-    private suspend fun uploadBitmapToGCS(bitmap: Bitmap): String? {
+    private suspend fun uploadBitmapToGCS(bitmap: Bitmap, step: VerificationStep): String? {
         val bytes = ByteArrayOutputStream().use { stream ->
             bitmap.compress(Bitmap.CompressFormat.JPEG, 75, stream)
             stream.toByteArray()
         }
-        return uploadToGCS(bytes, "image/jpeg", "Users/Verification")
+        val folder = when (step) {
+            VerificationStep.FRONT -> "front"
+            VerificationStep.LEFT -> "left"
+            VerificationStep.RIGHT -> "right"
+        }
+        return uploadToGCS(bytes, "image/jpeg", "Users/Verification/$folder")
     }
 
     fun clearUploadError() {
