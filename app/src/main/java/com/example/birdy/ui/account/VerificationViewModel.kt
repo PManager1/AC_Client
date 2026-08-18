@@ -3,12 +3,14 @@ package com.example.birdy.ui.account
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.ByteArrayOutputStream
 
 /**
  * The three sequential photo steps for manual 1099 verification.
@@ -31,7 +33,8 @@ data class VerificationUiState(
     val currentStep: VerificationStep = VerificationStep.FRONT,
     val photos: Map<VerificationStep, Bitmap> = emptyMap(),
     val isSubmitting: Boolean = false,
-    val submitted: Boolean = false
+    val submitted: Boolean = false,
+    val uploadError: String? = null
 )
 
 /**
@@ -109,8 +112,54 @@ class VerificationViewModel : ViewModel() {
     private fun submitApplication() {
         _uiState.update { it.copy(isSubmitting = true) }
         viewModelScope.launch {
-            delay(1000)
-            _uiState.update { it.copy(isSubmitting = false, submitted = true) }
+            val urls = mutableMapOf<VerificationStep, String>()
+            var success = true
+
+            val deferredResults = listOf(
+                async { uploadBitmapToGCS(uiState.value.photos[VerificationStep.FRONT]!!) },
+                async { uploadBitmapToGCS(uiState.value.photos[VerificationStep.LEFT]!!) },
+                async { uploadBitmapToGCS(uiState.value.photos[VerificationStep.RIGHT]!!) }
+            )
+            val results = deferredResults.map { it.await() }
+
+            results.forEachIndexed { index, url ->
+                val step = VerificationStep.entries[index]
+                if (url != null) {
+                    urls[step] = url
+                } else {
+                    success = false
+                }
+            }
+
+            if (success) {
+                for ((step, url) in urls) {
+                    println("📷 [Takepic] ${step.label}: $url")
+                }
+                delay(300)
+                _uiState.update { it.copy(isSubmitting = false, submitted = true) }
+            } else {
+                val failedCount = VerificationStep.entries.count { step ->
+                    uiState.value.photos.containsKey(step) && !urls.containsKey(step)
+                }
+                _uiState.update {
+                    it.copy(
+                        isSubmitting = false,
+                        uploadError = "Failed to upload $failedCount photo(s). Please check your connection and try again."
+                    )
+                }
+            }
         }
+    }
+
+    private suspend fun uploadBitmapToGCS(bitmap: Bitmap): String? {
+        val bytes = ByteArrayOutputStream().use { stream ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 75, stream)
+            stream.toByteArray()
+        }
+        return uploadToGCS(bytes, "image/jpeg", "Users/Verification")
+    }
+
+    fun clearUploadError() {
+        _uiState.update { it.copy(uploadError = null) }
     }
 }
