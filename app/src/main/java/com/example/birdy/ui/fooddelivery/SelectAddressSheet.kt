@@ -324,30 +324,65 @@ fun SelectAddressSheet(
                             errorMessage = "Not authenticated. Please sign in and try again."
                         } else {
                             scope.launch {
-                                val created = withContext(Dispatchers.IO) {
-                                    AddressService.createAddress(
-                                        data.street, data.cityStateZip,
-                                        data.latitude, data.longitude,
-                                        code.ifEmpty { null },
-                                        if (personalLabel == "custom") customLabel.ifBlank { "custom" } else (if (personalLabel == "none") null else personalLabel),
-                                        selectedAddressType,
-                                        deliveryPreference,
-                                        deliveryInstructions,
-                                        isGifting,
-                                        token
-                                    )
+                                // Dedup: check if an address with the same street already exists
+                                val existingAddress = localAddresses.find { 
+                                    it.street.equals(data.street, ignoreCase = true) 
                                 }
-                                if (created != null) {
-                                    withContext(Dispatchers.IO) {
-                                        AddressService.setDefaultAddress(created.id, token)
+                                
+                                if (existingAddress != null) {
+                                    // Update existing address instead of creating duplicate
+                                    val updated = withContext(Dispatchers.IO) {
+                                        AddressService.updateAddress(
+                                            existingAddress.id,
+                                            data.street, data.cityStateZip,
+                                            data.latitude, data.longitude,
+                                            code.ifEmpty { null },
+                                            if (personalLabel == "custom") customLabel.ifBlank { "custom" } else (if (personalLabel == "none") null else personalLabel),
+                                            selectedAddressType,
+                                            deliveryPreference,
+                                            deliveryInstructions,
+                                            isGifting,
+                                            token
+                                        )
                                     }
-                                    errorMessage = null
-                                    localAddresses.add(created)
-                                    onAddressSelected(created)
-                                    selectedId = created.id
+                                    if (updated != null) {
+                                        withContext(Dispatchers.IO) {
+                                            AddressService.setDefaultAddress(updated.id, token)
+                                        }
+                                        val idx = localAddresses.indexOfFirst { it.id == updated.id }
+                                        if (idx >= 0) localAddresses[idx] = updated
+                                        errorMessage = null
+                                        onAddressSelected(updated)
+                                        selectedId = updated.id
+                                    } else {
+                                        errorMessage = "Failed to update address. Please try again."
+                                    }
                                 } else {
-                                    println("❌ [AC] onSave: createAddress returned null")
-                                    errorMessage = "Failed to save address. Please try again."
+                                    // No duplicate — create new address
+                                    val created = withContext(Dispatchers.IO) {
+                                        AddressService.createAddress(
+                                            data.street, data.cityStateZip,
+                                            data.latitude, data.longitude,
+                                            code.ifEmpty { null },
+                                            if (personalLabel == "custom") customLabel.ifBlank { "custom" } else (if (personalLabel == "none") null else personalLabel),
+                                            selectedAddressType,
+                                            deliveryPreference,
+                                            deliveryInstructions,
+                                            isGifting,
+                                            token
+                                        )
+                                    }
+                                    if (created != null) {
+                                        withContext(Dispatchers.IO) {
+                                            AddressService.setDefaultAddress(created.id, token)
+                                        }
+                                        errorMessage = null
+                                        localAddresses.add(created)
+                                        onAddressSelected(created)
+                                        selectedId = created.id
+                                    } else {
+                                        errorMessage = "Failed to save address. Please try again."
+                                    }
                                 }
                                 pendingAddressData = null
                             }
