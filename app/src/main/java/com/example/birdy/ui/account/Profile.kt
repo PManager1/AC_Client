@@ -87,10 +87,10 @@ private val OrangeSec7 = Color(0xFF1C1C1E)
  * Edit Profile page with:
  *  - Profile image (tap to change via camera/gallery)
  *  - Basic Information (Professional Name, Service Type, Profile Image URL)
- *  - Save button → PATCH /meProfile
+ *  - Save button → PATCH /profile
  *  - Change tracking (only sends modified fields)
  *
- * Fetches profile data on load via GET /me
+ * Fetches profile data on load via GET /profile
  */
 @Composable
 fun ProfileScreen(
@@ -104,6 +104,7 @@ fun ProfileScreen(
     var originalLastName by remember { mutableStateOf("") }
     var originalEmail by remember { mutableStateOf("") }
     var originalPhone by remember { mutableStateOf("") }
+    var originalProfileImageUrl by remember { mutableStateOf("") }
     // Editable states
     var firstName by remember { mutableStateOf("") }
     var lastName by remember { mutableStateOf("") }
@@ -238,7 +239,7 @@ fun ProfileScreen(
                     return@withContext
                 }
 
-                val url = URL("${Config.API_BASE_URL}/me")
+                val url = URL("${Config.API_BASE_URL}/profile")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
                     setRequestProperty("Authorization", "Bearer $token")
@@ -258,39 +259,41 @@ fun ProfileScreen(
                 if (statusCode == 200) {
                     val json = JSONObject(responseStr)
 
-                    // Extract serviceProfile → providerDetails (mirrors iOS ProfessionalProfile)
-                    if (json.has("serviceProfile")) {
-                        val serviceProfile = json.getJSONObject("serviceProfile")
-                        if (serviceProfile.has("providerDetails")) {
-                            val details = serviceProfile.getJSONObject("providerDetails")
-                            withContext(Dispatchers.Main) {
-                                // Load user personal info from user object
-                                val userObj = json.optJSONObject("user")
-                                firstName = userObj?.optString("firstName", "") ?: ""
-                                lastName = userObj?.optString("lastName", "") ?: ""
-                                email = userObj?.optString("email", "") ?: ""
-                                phoneNumber = userObj?.optString("phoneNumber", "") ?: ""
-                                profileImageUrl = details.optString("profileImage", "")
+                    // Response: { success, data: { first_name, last_name, email, phone_number, profile_image_url } }
+                    val data = json.optJSONObject("data")
+                    withContext(Dispatchers.Main) {
+                        if (data != null) {
+                            firstName = data.optString("first_name", "")
+                            lastName = data.optString("last_name", "")
+                            email = if (data.isNull("email")) "" else data.optString("email", "")
+                            phoneNumber = data.optString("phone_number", "")
+                            profileImageUrl = data.optString("profile_image_url", "")
 
-                                // Save rating from providerDetails
-                                val ratingValue = details.optDouble("rating", 5.0).toFloat()
-                                AuthManager.setUserRating(ratingValue)
+                            // Persist to AuthManager (mirrors iOS AuthManager published vars)
+                            AuthManager.setUserFirstName(firstName)
+                            AuthManager.setUserLastName(lastName)
+                            AuthManager.setUserEmail(email)
+                            AuthManager.setProfileImageUrl(profileImageUrl)
 
-                                // Persist profile image to AuthManager
-                                AuthManager.setProfileImageUrl(profileImageUrl)
-
-                                // Store originals for change tracking
-                                originalFirstName = firstName
-                                originalLastName = lastName
-                                originalEmail = email
-                                originalPhone = phoneNumber
-                            }
+                            // Store originals for change tracking
+                            originalFirstName = firstName
+                            originalLastName = lastName
+                            originalEmail = email
+                            originalPhone = phoneNumber
+                            originalProfileImageUrl = profileImageUrl
                         }
+                        isLoading = false
                     }
-
-                    withContext(Dispatchers.Main) { isLoading = false }
+                } else if (statusCode == 401) {
+                    // Session expired / invalid (mirrors iOS AuthManager.handleUnauthorized)
+                    AuthManager.clearToken()
+                    withContext(Dispatchers.Main) {
+                        errorMessage = "Your session has expired. Please sign in again."
+                        showErrorDialog = true
+                        isLoading = false
+                    }
                 } else {
-                    println("❌ GET /me failed — Status: $statusCode, Body: $responseStr")
+                    println("❌ GET /profile failed — Status: $statusCode, Body: $responseStr")
                     withContext(Dispatchers.Main) {
                         errorMessage = "Server error ($statusCode): $responseStr"
                         showErrorDialog = true
@@ -307,7 +310,7 @@ fun ProfileScreen(
         }
     }
 
-    // Save profile via PATCH /meProfile (mirrors iOS saveProfile)
+    // Save profile via PATCH /profile (mirrors iOS saveProfile)
     // Only sends fields that have actually been changed
     suspend fun saveProfile() {
         withContext(Dispatchers.IO) {
@@ -324,16 +327,19 @@ fun ProfileScreen(
                 val jsonObject = JSONObject()
 
                 if (firstName != originalFirstName) {
-                    jsonObject.put("firstName", firstName)
+                    jsonObject.put("first_name", firstName)
                 }
                 if (lastName != originalLastName) {
-                    jsonObject.put("lastName", lastName)
+                    jsonObject.put("last_name", lastName)
                 }
                 if (email != originalEmail) {
                     jsonObject.put("email", email)
                 }
                 if (phoneNumber != originalPhone) {
-                    jsonObject.put("phoneNumber", phoneNumber)
+                    jsonObject.put("phone_number", phoneNumber)
+                }
+                if (profileImageUrl.isNotEmpty() && profileImageUrl != originalProfileImageUrl) {
+                    jsonObject.put("profile_image_url", profileImageUrl)
                 }
 
                 // If no fields changed, don't make the request (matches iOS)
@@ -345,7 +351,7 @@ fun ProfileScreen(
                     return@withContext
                 }
 
-                val url = URL("${Config.API_BASE_URL}/meProfile")
+                val url = URL("${Config.API_BASE_URL}/profile")
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "PATCH"
                     setRequestProperty("Content-Type", "application/json")
@@ -370,6 +376,7 @@ fun ProfileScreen(
                         originalLastName = lastName
                         originalEmail = email
                         originalPhone = phoneNumber
+                        originalProfileImageUrl = profileImageUrl
 
                         // Persist profile image to AuthManager
                         AuthManager.setProfileImageUrl(profileImageUrl)

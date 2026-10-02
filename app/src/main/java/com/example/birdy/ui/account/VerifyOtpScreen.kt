@@ -253,7 +253,10 @@ private suspend fun handleVerifyOTP(
 ): Pair<Boolean, String> {
     return withContext(Dispatchers.IO) {
         try {
-            val url = URL("${Config.API_BASE_URL}/verify-otp")
+            // Strip dashes, prepend +1 (matches iOS verifyOtp.swift)
+            val finalNumber = "+1" + phoneNumber.filter { it.isDigit() }.takeLast(10)
+
+            val url = URL("${Config.API_BASE_URL}/auth/verify-otp")
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json")
@@ -262,8 +265,12 @@ private suspend fun handleVerifyOTP(
                 readTimeout = 15000
             }
 
-            // Same body as iOS: {"phoneNumber": "...", "otp": "..."}
-            val body = """{"phoneNumber":"$phoneNumber","otp":"$otp"}"""
+            // Same body as iOS: {"mode": "phone", "identifier": "+1...", "code": "..."}
+            val body = JSONObject()
+                .put("mode", "phone")
+                .put("identifier", finalNumber)
+                .put("code", otp)
+                .toString()
             conn.outputStream.use { os ->
                 os.write(body.toByteArray(Charsets.UTF_8))
             }
@@ -278,28 +285,22 @@ private suspend fun handleVerifyOTP(
 
             if (statusCode == 200) {
                 val json = JSONObject(responseStr)
-                val token = json.optString("token", "")
+                val token = json.optString("session_token", "")
 
                 if (token.isNotEmpty()) {
-                    // Save token (same as iOS AuthManager.shared.setToken(token))
+                    // Save token (same as iOS AuthManager.shared.setToken(token, userId:))
                     AuthManager.setToken(token, context)
-
-                    // Extract user info if present
-                    if (json.has("user")) {
-                        val user = json.getJSONObject("user")
-                        AuthManager.setUserFirstName(user.optString("firstName", ""))
-                        AuthManager.setUserLastName(user.optString("lastName", ""))
-                        AuthManager.setUserEmail(user.optString("email", ""))
-                        AuthManager.setUserID(user.optString("_id", ""))
-                        AuthManager.setProfileImageUrl(user.optString("picture", ""))
-                    }
+                    AuthManager.setUserID(json.optString("user_id", ""))
 
                     Pair(true, "Verified")
                 } else {
                     Pair(false, "No token received from server")
                 }
             } else {
-                Pair(false, "Invalid code. Please try again. (HTTP $statusCode)")
+                val message = runCatching { JSONObject(responseStr).optString("message", "") }
+                    .getOrDefault("")
+                    .ifEmpty { "Invalid code. Please try again." }
+                Pair(false, "$message (HTTP $statusCode)")
             }
         } catch (e: Exception) {
             Pair(false, "Connection error: ${e.localizedMessage}")
@@ -314,7 +315,7 @@ private suspend fun handleSendOTP(phoneNumber: String): Pair<Boolean, String> {
             val cleanedNumber = phoneNumber.filter { it.isDigit() }
             val finalNumber = "+1$cleanedNumber"
 
-            val url = URL("${Config.API_BASE_URL}/send-otp-aws")
+            val url = URL("${Config.API_BASE_URL}/auth/send-otp")
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json")
@@ -323,7 +324,7 @@ private suspend fun handleSendOTP(phoneNumber: String): Pair<Boolean, String> {
                 readTimeout = 15000
             }
 
-            val body = """{"phoneNumber":"$finalNumber"}"""
+            val body = """{"mode":"phone","identifier":"$finalNumber"}"""
             conn.outputStream.use { os ->
                 os.write(body.toByteArray(Charsets.UTF_8))
             }

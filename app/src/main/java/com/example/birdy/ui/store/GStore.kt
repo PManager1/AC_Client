@@ -1,16 +1,22 @@
 package com.example.birdy.ui.store
 
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,47 +25,63 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DirectionsBike
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
 import com.example.birdy.data.AuthManager
+import com.example.birdy.data.CartItem
 import com.example.birdy.data.CartManager
 import com.example.birdy.data.Config
+import com.example.birdy.ui.components.shimmer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
+import java.util.Locale
 
 // MARK: - Grocery Store Screen (brands of type "grocery")
 // Mirrors IC GStore.swift — loads /brands/{id} + /brands/{id}/aisles and displays aisle items.
@@ -78,6 +100,19 @@ data class GroceryAisle(
     val items: List<GroceryAisleItem>
 )
 
+private val SystemGray5 = Color(0xFFE5E5EA)
+private val SystemGray6 = Color(0xFFF2F2F7)
+private val SecondaryText = Color(0xFF8A8A8E)
+private val BurntOrange = Color(0xFFD95F02)
+private val FreeFeeGreen = Color(0xFF0D8040)
+private val CartGreen = Color(0xFF34C759)
+
+// TODO: replace with the nearest store location once the backend returns it
+private const val MOCK_LOCATION_LINE = "2.5 mi • 6400 Allentown Road"
+
+// Fixed rows in the LazyColumn before the first aisle (banner, header, search, categories)
+private const val ROWS_BEFORE_AISLES = 4
+
 @Composable
 fun GStoreScreen(
     onBack: () -> Unit,
@@ -88,361 +123,801 @@ fun GStoreScreen(
     var storeData by remember { mutableStateOf<StoreData?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var selectedItem by remember { mutableStateOf<StoreMenuItem?>(null) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(restaurantId) {
+    suspend fun load() {
         isLoading = true
         errorMessage = null
         storeData = fetchGroceryStore(restaurantId)
+        if (storeData == null) errorMessage = "Failed to fetch store info"
         isLoading = false
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    LaunchedEffect(restaurantId) { load() }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+    ) {
+        val data = storeData
         when {
-            isLoading -> {
-                GrocerySkeletonLoading()
-            }
+            isLoading -> GroceryStoreSkeleton()
+            errorMessage != null -> GroceryErrorView(
+                error = errorMessage ?: "",
+                onRetry = { scope.launch { load() } },
+                onBack = onBack
+            )
+            data != null -> GroceryStoreContent(
+                data = data,
+                storeId = restaurantId,
+                onBack = onBack,
+                onSearch = { onSearch(data) },
+                onItemTap = { selectedItem = it }
+            )
+        }
 
-            errorMessage != null -> {
-                Column(
+        AnimatedVisibility(
+            visible = CartManager.items.isNotEmpty(),
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut()
+        ) {
+            FloatingCartBar(onViewCart = onViewCart)
+        }
+    }
+
+    selectedItem?.let { item ->
+        ItemDetailSheet(
+            item = item,
+            restaurantName = storeData?.brand_info?.name ?: "",
+            onDismiss = { selectedItem = null },
+            onAddToCart = { cartItem ->
+                CartManager.restaurantId = restaurantId
+                CartManager.addItem(cartItem)
+                selectedItem = null
+            }
+        )
+    }
+}
+
+// MARK: - Store Content
+
+@Composable
+private fun GroceryStoreContent(
+    data: StoreData,
+    storeId: String,
+    onBack: () -> Unit,
+    onSearch: () -> Unit,
+    onItemTap: (StoreMenuItem) -> Unit
+) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val haptics = LocalHapticFeedback.current
+    val expandedAisles = remember { mutableStateListOf<Int>() }
+    val storeName = data.brand_info.name
+
+    // Grocery items have no options, so + adds one straight to the cart.
+    fun quickAdd(item: StoreMenuItem) {
+        CartManager.restaurantId = storeId
+        CartManager.restaurantName = storeName
+        CartManager.addItem(
+            CartItem(
+                dishName = item.name,
+                restaurantName = storeName,
+                price = item.price,
+                quantity = 1,
+                imageURL = item.image_url,
+                menuItem = item
+            )
+        )
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+    }
+
+    fun quantityInCart(item: StoreMenuItem): Int =
+        CartManager.items
+            .filter { it.dishName == item.name && it.restaurantName == storeName }
+            .sumOf { it.quantity }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // 1. Banner with back button
+        item(key = "banner") { StoreBanner(data, onBack) }
+
+        // 2. Logo + name, location line, ETA and fee chips
+        item(key = "header") { StoreHeader(data) }
+
+        // 3. Search bar (opens the existing store search)
+        item(key = "search") { StoreSearchBar(storeName, onSearch) }
+
+        if (data.menu.isEmpty()) {
+            item(key = "empty") {
+                Text(
+                    text = "This store hasn't added any products yet.",
+                    fontSize = 16.sp,
+                    color = SecondaryText,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.White),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("Failed to load store", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(errorMessage ?: "", fontSize = 14.sp, color = Color.Gray)
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            text = "Go Back",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier
-                                .background(Color.Gray, RoundedCornerShape(12.dp))
-                                .clickable { onBack() }
-                                .padding(horizontal = 24.dp, vertical = 12.dp)
-                        )
-                        Text(
-                            text = "Retry",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier
-                                .background(
-                                    Brush.horizontalGradient(colors = listOf(Color(0xFF4CAF50), Color(0xFF388E3C))),
-                                    RoundedCornerShape(12.dp)
-                                )
-                                .clickable {
-                                    isLoading = true
-                                    errorMessage = null
-                                    scope.launch {
-                                        storeData = fetchGroceryStore(restaurantId)
-                                        isLoading = false
-                                    }
-                                }
-                                .padding(horizontal = 24.dp, vertical = 12.dp)
-                        )
-                    }
+                        .fillMaxWidth()
+                        .padding(vertical = 40.dp)
+                )
+            }
+        } else {
+            // 4. Emoji category row: tapping one scrolls to that aisle
+            item(key = "categories") {
+                CategoryRow(data.menu) { index ->
+                    scope.launch { listState.animateScrollToItem(ROWS_BEFORE_AISLES + index) }
                 }
             }
 
-            else -> {
-                val data = storeData
-                if (data != null) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.White)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        // 1. BANNER with header buttons
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(240.dp)
-                        ) {
-                            if (data.brand_info.banner_image_url.isEmpty()) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(240.dp)
-                                        .background(Color(0xFFE0E0E0))
-                                )
-                            } else {
-                                SubcomposeAsyncImage(
-                                    model = data.brand_info.banner_image_url,
-                                    contentDescription = "Banner",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(240.dp),
-                                    loading = {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(240.dp)
-                                                .background(Color.Gray.copy(alpha = 0.15f))
-                                        )
-                                    },
-                                    error = {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(240.dp)
-                                                .background(Color.Gray.copy(alpha = 0.15f))
-                                        )
-                                    }
-                                )
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(100.dp)
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors = listOf(Color.Black.copy(alpha = 0.3f), Color.Transparent)
-                                        )
-                                    )
-                            )
-
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 50.dp, start = 16.dp, end = 16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                HeaderCircleButton(icon = Icons.AutoMirrored.Filled.ArrowBack, onClick = onBack)
-                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    HeaderCircleButton(icon = Icons.Default.Search, onClick = { onSearch(data) })
-                                    HeaderCircleButton(icon = Icons.Default.MoreVert) {}
-                                }
-                            }
-                        }
-
-                        // 2. MAIN CONTENT
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color.White)
-                                .padding(horizontal = 16.dp)
-                        ) {
-                            // Logo overlapping banner
-                            Box(modifier = Modifier.offset(y = (-40).dp)) {
-                                if (data.brand_info.logo_url.isEmpty()) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(84.dp)
-                                            .background(Color.Gray.copy(alpha = 0.1f), CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = data.brand_info.name.take(1).uppercase(),
-                                            fontSize = 28.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color.Gray
-                                        )
-                                    }
-                                } else {
-                                    SubcomposeAsyncImage(
-                                        model = data.brand_info.logo_url,
-                                        contentDescription = "Logo",
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .size(84.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White)
-                                            .shadow(8.dp, CircleShape),
-                                        loading = {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(84.dp)
-                                                    .background(Color.Gray.copy(alpha = 0.1f), CircleShape)
-                                            )
-                                        },
-                                        error = {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(84.dp)
-                                                    .background(Color.Gray.copy(alpha = 0.15f), CircleShape),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = data.brand_info.name.take(1).uppercase(),
-                                                    fontSize = 28.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color.Gray
-                                                )
-                                            }
-                                        }
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height((-30).dp))
-
-                            // Title & rating
-                            Column(
-                                modifier = Modifier.padding(top = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = data.brand_info.name,
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color.Black
-                                )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = String.format("%.1f", data.brand_info.rating),
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.Black
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Default.Star,
-                                        contentDescription = null,
-                                        tint = Color.Black,
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Text(
-                                        text = "(${data.brand_info.review_count}) • Grocery",
-                                        fontSize = 14.sp,
-                                        color = Color.Gray
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(20.dp))
-
-                            // 3. MENU (aisles)
-                            if (data.menu.isEmpty()) {
-                                Text(
-                                    text = "No menu available yet",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Black,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                                )
-                            } else {
-                                data.menu.forEachIndexed { index, category ->
-                                    Column(modifier = Modifier.fillMaxWidth()) {
-                                        Text(
-                                            text = category.category_name,
-                                            fontSize = 20.sp,
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = Color.Black,
-                                            modifier = Modifier.padding(
-                                                top = if (index == 0) 0.dp else 30.dp,
-                                                bottom = 16.dp
-                                            )
-                                        )
-                                        category.items.chunked(2).forEach { rowItems ->
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                            ) {
-                                                rowItems.forEach { item ->
-                                                    StoreFoodCard(
-                                                        menuItem = item,
-                                                        restaurantName = data.brand_info.name,
-                                                        onItemTap = { },
-                                                        modifier = Modifier.weight(1f),
-                                                        descriptionColor = Color.Black
-                                                    )
-                                                }
-                                                if (rowItems.size == 1) {
-                                                    Spacer(modifier = Modifier.weight(1f))
-                                                }
-                                            }
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                        }
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(if (CartManager.items.isEmpty()) 20.dp else 100.dp))
-                        }
-                    }
-                }
+            // 5. Aisles
+            itemsIndexed(data.menu, key = { index, _ -> "aisle-$index" }) { index, aisle ->
+                AisleSection(
+                    aisle = aisle,
+                    isExpanded = index in expandedAisles,
+                    onToggle = {
+                        if (index in expandedAisles) expandedAisles.remove(index) else expandedAisles.add(index)
+                    },
+                    quantityInCart = ::quantityInCart,
+                    onAdd = ::quickAdd,
+                    onItemTap = onItemTap
+                )
             }
         }
 
-        // Floating cart bar
-        if (CartManager.items.isNotEmpty()) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Bottom
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 16.dp)
-                        .shadow(20.dp, RoundedCornerShape(20.dp))
-                        .background(
-                            Brush.horizontalGradient(colors = listOf(Color(0xFF4CAF50), Color(0xFF388E3C))),
-                            RoundedCornerShape(20.dp)
-                        )
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Box {
-                        Icon(
-                            imageVector = Icons.Default.ShoppingCart,
-                            contentDescription = "Cart",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .offset(x = 6.dp, y = (-6).dp)
-                                .background(Color.Red, CircleShape)
-                                .size(16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "${CartManager.itemCount}",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                        }
-                    }
-                    Column {
-                        Text(
-                            text = "${CartManager.itemCount} item${if (CartManager.itemCount == 1) "" else "s"}",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Text(
-                            text = "$${String.format(java.util.Locale.US, "%.2f", CartManager.total)}",
-                            fontSize = 14.sp,
-                            color = Color.White.copy(alpha = 0.8f)
-                        )
-                    }
-                    Spacer(modifier = Modifier.weight(1f))
+        item(key = "bottom-spacer") {
+            Spacer(modifier = Modifier.height(if (CartManager.items.isEmpty()) 24.dp else 110.dp))
+        }
+    }
+}
+
+// Stores without a banner get a slim top bar instead of an empty grey block.
+@Composable
+private fun StoreBanner(data: StoreData, onBack: () -> Unit) {
+    val hasBanner = data.brand_info.banner_image_url.isNotEmpty()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(if (hasBanner) 190.dp else 72.dp)
+            .background(Color.White)
+    ) {
+        if (hasBanner) {
+            AsyncImage(
+                model = data.brand_info.banner_image_url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(95.dp)
+                    .background(
+                        Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.3f), Color.Transparent))
+                    )
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .padding(top = 16.dp, start = 16.dp)
+                .size(40.dp)
+                .shadow(if (hasBanner) 6.dp else 0.dp, CircleShape)
+                .background(if (hasBanner) Color.White else SystemGray6, CircleShape)
+                .clip(CircleShape)
+                .clickable { onBack() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                contentDescription = "Back",
+                tint = Color.Black,
+                modifier = Modifier.size(28.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun StoreHeader(data: StoreData) {
+    val fee = data.location_info.delivery_fee
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            StoreLogo(data.brand_info.logo_url)
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = data.brand_info.name,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.Black,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row {
                     Text(
-                        text = "View Cart",
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF388E3C),
-                        modifier = Modifier
-                            .background(Color.White, RoundedCornerShape(50))
-                            .clickable { onViewCart() }
-                            .padding(horizontal = 24.dp, vertical = 12.dp)
+                        text = "$MOCK_LOCATION_LINE • ",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = SecondaryText,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Text(
+                        text = "Change",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.Black,
+                        textDecoration = TextDecoration.Underline,
+                        maxLines = 1
                     )
                 }
             }
         }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            InfoChip(Icons.Filled.Schedule, data.location_info.delivery_time_est, highlighted = false)
+            InfoChip(Icons.Filled.DirectionsBike, deliveryFeeText(fee), highlighted = fee <= 0)
+        }
+    }
+}
+
+@Composable
+private fun StoreLogo(url: String) {
+    Box(
+        modifier = Modifier
+            .size(60.dp)
+            .shadow(3.dp, CircleShape)
+            .background(Color.White, CircleShape)
+            .border(1.dp, SystemGray5, CircleShape)
+            .clip(CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        if (url.isEmpty()) {
+            Icon(
+                imageVector = Icons.Filled.ShoppingCart,
+                contentDescription = null,
+                tint = Color.Gray,
+                modifier = Modifier.size(24.dp)
+            )
+        } else {
+            AsyncImage(
+                model = url,
+                contentDescription = "Logo",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(6.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun InfoChip(icon: ImageVector, text: String, highlighted: Boolean) {
+    val color = if (highlighted) FreeFeeGreen else Color.Black
+    Row(
+        modifier = Modifier
+            .background(if (highlighted) FreeFeeGreen.copy(alpha = 0.1f) else SystemGray6, RoundedCornerShape(50))
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+        Text(text = text, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = color)
+    }
+}
+
+@Composable
+private fun StoreSearchBar(storeName: String, onSearch: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .padding(start = 16.dp, end = 16.dp, bottom = 22.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(50))
+            .background(SystemGray6)
+            .clickable { onSearch() }
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Search,
+            contentDescription = null,
+            tint = Color.Black,
+            modifier = Modifier.size(20.dp)
+        )
+        Text(
+            text = "Search $storeName",
+            fontSize = 16.sp,
+            color = SecondaryText,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun CategoryRow(aisles: List<StoreMenuCategory>, onSelect: (Int) -> Unit) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.padding(bottom = 4.dp)
+    ) {
+        itemsIndexed(aisles) { index, aisle ->
+            Column(
+                modifier = Modifier
+                    .width(78.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onSelect(index) },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box(modifier = Modifier.size(width = 64.dp, height = 56.dp), contentAlignment = Alignment.Center) {
+                    Text(text = AisleEmoji.emoji(aisle.category_name), fontSize = 40.sp)
+                }
+                Text(
+                    text = aisle.category_name,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black,
+                    maxLines = 2,
+                    textAlign = TextAlign.Center,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+// One aisle: header + horizontal row, or a full grid when expanded
+@Composable
+private fun AisleSection(
+    aisle: StoreMenuCategory,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    quantityInCart: (StoreMenuItem) -> Int,
+    onAdd: (StoreMenuItem) -> Unit,
+    onItemTap: (StoreMenuItem) -> Unit
+) {
+    val count = aisle.items.size
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 28.dp)
+            .animateContentSize(),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = aisle.category_name,
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.Black
+                )
+                Text(
+                    text = "$count item${if (count == 1) "" else "s"}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = SecondaryText
+                )
+            }
+            if (count > 2) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(SystemGray6)
+                        .clickable { onToggle() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Filled.KeyboardArrowUp else Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = if (isExpanded) "Show fewer ${aisle.category_name}" else "See all ${aisle.category_name}",
+                        tint = Color.Black,
+                        modifier = Modifier.size(if (isExpanded) 22.dp else 16.dp)
+                    )
+                }
+            }
+        }
+
+        when {
+            aisle.items.isEmpty() -> Text(
+                text = "No items in this aisle yet.",
+                fontSize = 14.sp,
+                color = SecondaryText,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            isExpanded -> Column(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                aisle.items.chunked(2).forEach { rowItems ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        rowItems.forEach { item ->
+                            GroceryProductCard(
+                                item = item,
+                                quantityInCart = quantityInCart(item),
+                                onAdd = { onAdd(item) },
+                                onTap = { onItemTap(item) },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        if (rowItems.size == 1) Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+
+            else -> LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                itemsIndexed(aisle.items, key = { _, item -> item.id }) { _, item ->
+                    GroceryProductCard(
+                        item = item,
+                        quantityInCart = quantityInCart(item),
+                        onAdd = { onAdd(item) },
+                        onTap = { onItemTap(item) },
+                        modifier = Modifier.width(136.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Product Card
+
+@Composable
+private fun GroceryProductCard(
+    item: StoreMenuItem,
+    quantityInCart: Int,
+    onAdd: () -> Unit,
+    onTap: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isAvailable = item.is_available
+
+    Column(
+        modifier = modifier
+            .alpha(if (isAvailable) 1f else 0.55f)
+            .clickable(onClick = onTap),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        // Product photos come on white, so the tile is white with a hairline border.
+        Box(
+            modifier = Modifier
+                .padding(bottom = 6.dp)
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color.White)
+                .border(1.dp, SystemGray5, RoundedCornerShape(14.dp))
+        ) {
+            if (item.image_url.isEmpty()) {
+                Icon(
+                    imageVector = Icons.Outlined.ShoppingCart,
+                    contentDescription = null,
+                    tint = Color.Gray.copy(alpha = 0.5f),
+                    modifier = Modifier
+                        .size(32.dp)
+                        .align(Alignment.Center)
+                )
+            } else {
+                AsyncImage(
+                    model = item.image_url,
+                    contentDescription = item.name,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(10.dp)
+                )
+            }
+
+            if (isAvailable) {
+                AddButton(
+                    quantityInCart = quantityInCart,
+                    itemName = item.name,
+                    onAdd = onAdd,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                )
+            }
+        }
+
+        if (isAvailable) {
+            PriceText(item.price)
+        } else {
+            Text("Out of stock", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = SecondaryText)
+        }
+
+        if (item.description.isNotEmpty()) {
+            Text(
+                text = item.description,
+                fontSize = 13.sp,
+                color = SecondaryText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        Text(
+            text = item.name,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.Black,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun AddButton(quantityInCart: Int, itemName: String, onAdd: () -> Unit, modifier: Modifier = Modifier) {
+    val inCart = quantityInCart > 0
+    Box(
+        modifier = modifier
+            .size(34.dp)
+            .shadow(3.dp, CircleShape)
+            .background(if (inCart) BurntOrange else Color.White, CircleShape)
+            .then(if (inCart) Modifier else Modifier.border(BorderStroke(1.dp, SystemGray5), CircleShape))
+            .clip(CircleShape)
+            .clickable(onClick = onAdd),
+        contentAlignment = Alignment.Center
+    ) {
+        if (inCart) {
+            Text(text = "$quantityInCart", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        } else {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = "Add $itemName to cart",
+                tint = Color.Black,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+// "$4.39" drawn as big dollars with small raised cents.
+@Composable
+private fun PriceText(price: Double) {
+    val totalCents = Math.round(price * 100)
+    Row(verticalAlignment = Alignment.Top) {
+        Text(text = "$${totalCents / 100}", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = Color.Black)
+        Text(
+            text = String.format(Locale.US, "%02d", totalCents % 100),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color.Black,
+            modifier = Modifier.padding(start = 1.dp, top = 2.dp)
+        )
+    }
+}
+
+private fun deliveryFeeText(fee: Double): String =
+    if (fee <= 0) "$0 delivery fee" else "$${String.format(Locale.US, "%.2f", fee)} delivery fee"
+
+// MARK: - Loading / Error / Cart bar
+
+@Composable
+private fun GroceryErrorView(error: String, onRetry: () -> Unit, onBack: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(vertical = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Spacer(modifier = Modifier.weight(1f))
+        Icon(
+            imageVector = Icons.Outlined.WarningAmber,
+            contentDescription = null,
+            tint = Color.Gray,
+            modifier = Modifier.size(48.dp)
+        )
+        Text("Could not load store", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = SecondaryText)
+        Text(
+            text = error,
+            fontSize = 14.sp,
+            color = SecondaryText,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = 40.dp)
+        )
+        Text(
+            text = "Try Again",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF007AFF))
+                .clickable { onRetry() }
+                .padding(horizontal = 24.dp, vertical = 10.dp)
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Text(
+            text = "Go Back",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = SecondaryText,
+            modifier = Modifier
+                .clickable { onBack() }
+                .padding(8.dp)
+        )
+    }
+}
+
+@Composable
+private fun FloatingCartBar(onViewCart: () -> Unit) {
+    val count = CartManager.itemCount
+    Row(
+        modifier = Modifier
+            .padding(start = 36.dp, end = 36.dp, bottom = 24.dp)
+            .fillMaxWidth()
+            .shadow(12.dp, RoundedCornerShape(50), ambientColor = CartGreen, spotColor = CartGreen)
+            .background(
+                Brush.verticalGradient(listOf(CartGreen, Color(0xFF2DB04F))),
+                RoundedCornerShape(50)
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box {
+            Icon(
+                imageVector = Icons.Filled.ShoppingBag,
+                contentDescription = "Cart",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = "$count",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 5.dp, y = (-5).dp)
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "$${String.format(Locale.US, "%.2f", CartManager.total)}",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Text(
+                text = "$count item${if (count == 1) "" else "s"}",
+                fontSize = 11.sp,
+                color = Color.White.copy(alpha = 0.75f)
+            )
+        }
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(Color.White)
+                .clickable { onViewCart() }
+                .padding(horizontal = 18.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Text("View Cart", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = CartGreen)
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = CartGreen,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun GroceryStoreSkeleton() {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp)
+                .shimmer()
+        )
+        Column(
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .shimmer()
+                )
+                Box(
+                    modifier = Modifier
+                        .size(width = 160.dp, height = 26.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .shimmer()
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(width = 250.dp, height = 14.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmer()
+            )
+            Box(
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth()
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .shimmer()
+            )
+        }
+    }
+}
+
+// MARK: - Aisle emoji (mirrors IC AisleEmoji)
+
+private object AisleEmoji {
+    // Checked in order, so more specific words come first.
+    private val rules: List<Pair<List<String>, String>> = listOf(
+        listOf("deal", "sale", "special") to "🏷️",
+        listOf("baby", "infant") to "🍼",
+        listOf("pet", "dog", "cat") to "🐾",
+        listOf("seafood", "fish", "shrimp") to "🦐",
+        listOf("meat", "beef", "chicken", "pork", "poultry") to "🥩",
+        listOf("deli", "prepared", "sandwich") to "🥪",
+        listOf("produce", "fruit", "vegetable", "veggie", "fresh") to "🥦",
+        listOf("bakery", "bread", "bagel") to "🍞",
+        listOf("egg") to "🥚",
+        listOf("dairy", "cheese", "milk", "yogurt") to "🧀",
+        listOf("frozen", "ice") to "🧊",
+        listOf("snack", "chip", "cracker") to "🍿",
+        listOf("candy", "sweet", "chocolate", "dessert") to "🍬",
+        listOf("coffee", "tea") to "☕️",
+        listOf("wine", "beer", "alcohol", "spirit", "liquor") to "🍷",
+        listOf("beverage", "drink", "juice", "soda", "water") to "🥤",
+        listOf("breakfast", "cereal") to "🥣",
+        listOf("pasta", "rice", "grain", "noodle") to "🍝",
+        listOf("condiment", "sauce", "spice", "seasoning", "oil") to "🧂",
+        listOf("pantry", "canned", "can ", "soup") to "🥫",
+        listOf("household", "cleaning", "paper", "laundry") to "🧴",
+        listOf("health", "pharmacy", "vitamin", "medicine") to "💊",
+        listOf("personal", "beauty", "bath", "body") to "🧼",
+        listOf("find", "new", "trending", "popular") to "✨"
+    )
+
+    fun emoji(aisleName: String): String {
+        val name = aisleName.lowercase()
+        return rules.firstOrNull { (keywords, _) -> keywords.any { name.contains(it) } }?.second ?: "🛒"
     }
 }
 
@@ -452,9 +927,9 @@ private suspend fun fetchGroceryStore(restaurantId: String): StoreData? {
         try {
             // 1. Fetch brand info
             val brandJson = fetchJson("${Config.API_BASE_URL}/brands/$restaurantId")
-            val brandName = brandJson?.optString("name", "") ?: ""
-            val logoUrl = brandJson?.optString("logoUrl", "") ?: ""
-            val bannerUrl = brandJson?.optString("bannerUrl", "") ?: ""
+            val brandName = brandJson?.optNonNullString("name") ?: ""
+            val logoUrl = brandJson?.optNonNullString("logoUrl") ?: ""
+            val bannerUrl = brandJson?.optNonNullString("bannerUrl") ?: ""
 
             // 2. Fetch aisles
             var aisles: List<GroceryAisle> = emptyList()
@@ -468,9 +943,9 @@ private suspend fun fetchGroceryStore(restaurantId: String): StoreData? {
             val menu = aisles.map { aisle ->
                 StoreMenuCategory(
                     category_name = aisle.category,
-                    items = aisle.items.mapIndexed { i, item ->
+                    items = aisle.items.map { item ->
                         StoreMenuItem(
-                            id = "g-$i",
+                            id = java.util.UUID.randomUUID().toString(),
                             name = item.name,
                             description = item.description,
                             price = item.price,
@@ -562,271 +1037,6 @@ private fun parseAisles(root: JSONObject?): List<GroceryAisle> {
     return result
 }
 
-// MARK: - Fancy Skeleton Loading Waves for Grocery Stores
-@Composable
-fun GrocerySkeletonLoading() {
-    val transition = rememberInfiniteTransition(label = "skeletonWaves")
-    
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.White)
-    ) {
-        // Banner skeleton with wave animation
-        val bannerWave1 by transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1000f,
-            animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 0)),
-            label = "bannerWave1"
-        )
-        val bannerWave2 by transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1000f,
-            animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 300)),
-            label = "bannerWave2"
-        )
-        val bannerWave3 by transition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1000f,
-            animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 600)),
-            label = "bannerWave3"
-        )
-        
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(240.dp)
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFFF5F5F5),
-                            Color(0xFFE8E8E8),
-                            Color(0xFFF5F5F5)
-                        ),
-                        start = Offset(bannerWave1 - 200f, bannerWave1 - 200f),
-                        end = Offset(bannerWave1, bannerWave1)
-                    )
-                )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.05f),
-                                Color.Transparent
-                            )
-                        )
-                    )
-            )
-        }
-
-        // Main content area
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color.White)
-                .padding(horizontal = 16.dp)
-        ) {
-            // Logo circle with wave animation
-            val logoWave by transition.animateFloat(
-                initialValue = 0f,
-                targetValue = 1000f,
-                animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 200)),
-                label = "logoWave"
-            )
-            
-            Box(modifier = Modifier.offset(y = (-40).dp)) {
-                Box(
-                    modifier = Modifier
-                        .size(84.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFFF0F0F0),
-                                    Color(0xFFE0E0E0),
-                                    Color(0xFFF0F0F0)
-                                ),
-                                start = Offset(logoWave - 200f, logoWave - 200f),
-                                end = Offset(logoWave, logoWave)
-                            )
-                        )
-                )
-            }
-            
-            Spacer(modifier = Modifier.height((-30).dp))
-            
-            // Title and subtitle with wave animations
-            val titleWave by transition.animateFloat(
-                initialValue = 0f,
-                targetValue = 1000f,
-                animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 400)),
-                label = "titleWave"
-            )
-            val subtitleWave by transition.animateFloat(
-                initialValue = 0f,
-                targetValue = 1000f,
-                animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = 700)),
-                label = "subtitleWave"
-            )
-            
-            Column(
-                modifier = Modifier.padding(top = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .height(24.dp)
-                        .fillMaxWidth(0.65f)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFFF5F5F5),
-                                    Color(0xFFE5E5E5),
-                                    Color(0xFFF5F5F5)
-                                ),
-                                start = Offset(titleWave - 200f, titleWave - 200f),
-                                end = Offset(titleWave, titleWave)
-                            )
-                        )
-                )
-                Box(
-                    modifier = Modifier
-                        .height(16.dp)
-                        .fillMaxWidth(0.45f)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFFF5F5F5),
-                                    Color(0xFFE8E8E8),
-                                    Color(0xFFF5F5F5)
-                                ),
-                                start = Offset(subtitleWave - 200f, subtitleWave - 200f),
-                                end = Offset(subtitleWave, subtitleWave)
-                            )
-                        )
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Menu categories with staggered wave animations
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-                items(4) { index ->
-                    val categoryWave by transition.animateFloat(
-                        initialValue = 0f,
-                        targetValue = 1000f,
-                        animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = (900 + index * 200).toInt())),
-                        label = "categoryWave$index"
-                    )
-                    
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        // Category title
-                        Box(
-                            modifier = Modifier
-                                .height(20.dp)
-                                .width(140.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        colors = listOf(
-                                            Color(0xFFF5F5F5),
-                                            Color(0xFFE8E8E8),
-                                            Color(0xFFF5F5F5)
-                                        ),
-                                        start = Offset(categoryWave - 200f, categoryWave - 200f),
-                                        end = Offset(categoryWave, categoryWave)
-                                    )
-                                )
-                        )
-                        
-                        Spacer(modifier = Modifier.height(12.dp))
-                        
-                        // Food card placeholders in grid
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            repeat(2) { cardIndex ->
-                                val cardWave by transition.animateFloat(
-                                    initialValue = 0f,
-                                    targetValue = 1000f,
-                                    animationSpec = infiniteRepeatable(animation = tween(1500, delayMillis = (1100 + index * 200 + cardIndex * 100).toInt())),
-                                    label = "cardWave${index}_${cardIndex}"
-                                )
-                                
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    // Card image
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(130.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(
-                                                Brush.linearGradient(
-                                                    colors = listOf(
-                                                        Color(0xFFF5F5F5),
-                                                        Color(0xFFE8E8E8),
-                                                        Color(0xFFF5F5F5)
-                                                    ),
-                                                    start = Offset(cardWave - 200f, cardWave - 200f),
-                                                    end = Offset(cardWave, cardWave)
-                                                )
-                                            )
-                                    )
-                                    // Card title
-                                    Box(
-                                        modifier = Modifier
-                                            .height(14.dp)
-                                            .fillMaxWidth(0.7f)
-                                            .clip(RoundedCornerShape(4.dp))
-                                            .background(
-                                                Brush.linearGradient(
-                                                    colors = listOf(
-                                                        Color(0xFFF5F5F5),
-                                                        Color(0xFFE8E8E8),
-                                                        Color(0xFFF5F5F5)
-                                                    ),
-                                                    start = Offset(cardWave - 200f, cardWave - 200f),
-                                                    end = Offset(cardWave, cardWave)
-                                                )
-                                            )
-                                    )
-                                    // Card price
-                                    Box(
-                                        modifier = Modifier
-                                            .height(12.dp)
-                                            .width(40.dp)
-                                            .clip(RoundedCornerShape(3.dp))
-                                            .background(
-                                                Brush.linearGradient(
-                                                    colors = listOf(
-                                                        Color(0xFFF5F5F5),
-                                                        Color(0xFFE8E8E8),
-                                                        Color(0xFFF5F5F5)
-                                                    ),
-                                                    start = Offset(cardWave - 200f, cardWave - 200f),
-                                                    end = Offset(cardWave, cardWave)
-                                                )
-                                            )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+// optString returns the literal "null" for JSON null (e.g. "bannerUrl": null), so treat that as empty.
+private fun JSONObject.optNonNullString(key: String): String =
+    if (isNull(key)) "" else optString(key, "")

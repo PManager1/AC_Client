@@ -304,7 +304,7 @@ private suspend fun handleSendOTP(phoneNumber: String): Pair<Boolean, String> {
             val cleanedNumber = phoneNumber.filter { it.isDigit() }
             val finalNumber = "+1$cleanedNumber"
 
-            val url = URL("${Config.API_BASE_URL}/send-otp-aws")
+            val url = URL("${Config.API_BASE_URL}/auth/send-otp")
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 setRequestProperty("Content-Type", "application/json")
@@ -313,7 +313,7 @@ private suspend fun handleSendOTP(phoneNumber: String): Pair<Boolean, String> {
                 readTimeout = 15000
             }
 
-            val body = """{"phoneNumber":"$finalNumber"}"""
+            val body = """{"mode":"phone","identifier":"$finalNumber"}"""
             conn.outputStream.use { os ->
                 os.write(body.toByteArray(Charsets.UTF_8))
             }

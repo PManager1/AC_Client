@@ -5,7 +5,9 @@ package com.example.birdy.data
  */
 object Config {
     // const val API_BASE_URL = "http://10.0.2.2:3030"           // Android Emulator → Local
-    const val API_BASE_URL = "https://tcdlm857gf.execute-api.us-east-1.amazonaws.com/dev/api/v1"  // AWS Development
+    // const val API_BASE_URL = "https://tcdlm857gf.execute-api.us-east-1.amazonaws.com/dev/api/v1"  // AWS Development
+    // const val API_BASE_URL = "https://udo1.gigalixirapp.com"
+    const val API_BASE_URL = "http://10.0.2.2:4000/api/v1"      // Android Emulator → local Elixir (iOS: localhost:4000/api/v1)
 
     // WebSocket API (separate API Gateway deployment from REST API) — matches iOS BirdyKit/Config.swift
     const val WS_API_BASE_URL = "wss://fg1a60piqh.execute-api.us-east-1.amazonaws.com/dev"
