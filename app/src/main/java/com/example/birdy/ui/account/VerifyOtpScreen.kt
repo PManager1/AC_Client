@@ -96,7 +96,7 @@ fun VerifyOtpScreen(
             value = otp,
             onValueChange = { input ->
                 val digits = input.filter { it.isDigit() }
-                otp = digits.take(4)
+                otp = digits.take(6)
                 errorMessage = null
             },
             placeholder = {

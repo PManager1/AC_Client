@@ -32,14 +32,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.birdy.data.AuthManager
-import com.example.birdy.data.Config
+import com.example.birdy.data.RecentSearchEntry
+import com.example.birdy.data.SearchApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 
 @Composable
 fun SeaMoreScreen(
@@ -119,8 +116,11 @@ fun SeaMoreScreen(
                             color = Color.Black
                         )
                         TextButton(onClick = {
-                            scope.launch { clearAllSearches() }
                             recentSearches = emptyList()
+                            scope.launch {
+                                // On failure, reload so the list reflects the server again.
+                                if (!clearAllSearches()) recentSearches = loadRecentSearches()
+                            }
                         }) {
                             Text(
                                 text = "Clear All",
@@ -160,43 +160,8 @@ fun SeaMoreScreen(
     }
 }
 
-private suspend fun loadRecentSearches(): List<RecentSearchEntry> = withContext(Dispatchers.IO) {
-    try {
-        val url = URL("${Config.API_BASE_URL}/users/search-food-history")
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.setRequestProperty("Content-Type", "application/json")
-        AuthManager.getToken()?.let {
-            conn.setRequestProperty("Authorization", "Bearer $it")
-        }
-        val json = conn.inputStream.bufferedReader().readText()
-        val obj = JSONObject(json)
-        val arr = obj.getJSONArray("searches")
-        (0 until arr.length()).map { i ->
-            val item = arr.getJSONObject(i)
-            RecentSearchEntry(
-                query = item.getString("query"),
-                count = item.optInt("count", 0)
-            )
-        }
-    } catch (e: Exception) {
-        android.util.Log.e("SeaMore", "Failed to load recent searches", e)
-        emptyList()
-    }
-}
+private suspend fun loadRecentSearches(): List<RecentSearchEntry> =
+    withContext(Dispatchers.IO) { SearchApi.fetchHistory().recentSearches }
 
-private suspend fun clearAllSearches() = withContext(Dispatchers.IO) {
-    try {
-        val url = URL("${Config.API_BASE_URL}/users/search-food-history")
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "DELETE"
-        conn.setRequestProperty("Content-Type", "application/json")
-        AuthManager.getToken()?.let {
-            conn.setRequestProperty("Authorization", "Bearer $it")
-        }
-        val code = conn.responseCode
-        android.util.Log.d("SeaMore", "Clear All returned $code")
-    } catch (e: Exception) {
-        android.util.Log.e("SeaMore", "Failed to clear searches", e)
-    }
-}
+private suspend fun clearAllSearches(): Boolean =
+    withContext(Dispatchers.IO) { SearchApi.clearSearches() }

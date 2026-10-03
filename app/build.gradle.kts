@@ -105,6 +105,8 @@ dependencies {
     implementation("com.google.firebase:firebase-messaging-ktx")
 
     testImplementation(libs.junit)
+    // Real org.json for JVM unit tests (android.jar only ships stubs). Test-only.
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

@@ -261,15 +261,19 @@ fun BirdyAppContent() {
                 when (selectedTab) {
                     TAB_HOME -> {
                         when {
+                            // Above showSearchFood so "See More" opens on top of search and back returns to it.
+                            showSeaMore -> {
+                                SeaMoreScreen(
+                                    onBack = { showSeaMore = false }
+                                )
+                            }
                             showSearchFood -> {
                                 SearchFoodScreen(
                                     onBack = { showSearchFood = false },
-                                    onRestaurantClick = { restaurantId ->
-                                        selectedRestaurantId = restaurantId
-                                        showStore = true
-                                    },
                                     onBrandClick = { brandId ->
                                         selectedRestaurantId = brandId
+                                        selectedStoreName = ""
+                                        selectedIsGrocery = false
                                         showSearchFood = false
                                         showStore = true
                                     },
@@ -488,12 +492,10 @@ fun BirdyAppContent() {
                             showSearchFood -> {
                                 SearchFoodScreen(
                                     onBack = { showSearchFood = false },
-                                    onRestaurantClick = { restaurantId ->
-                                        selectedRestaurantId = restaurantId
-                                        showStore = true
-                                    },
                                     onBrandClick = { brandId ->
                                         selectedRestaurantId = brandId
+                                        selectedStoreName = ""
+                                        selectedIsGrocery = false
                                         showSearchFood = false
                                         showStore = true
                                     },
