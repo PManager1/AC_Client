@@ -1,6 +1,7 @@
 package com.example.birdy.data
 
 import android.content.Context
+import com.birdy.kit.chat.OrderChatSocket
 import android.content.SharedPreferences
 
 /**
@@ -127,6 +128,8 @@ object AuthManager {
 
     /** Clear everything on sign-out / account deletion. */
     fun clearAll() {
+        // Stop the live order chat stream for this (now signed-out) user.
+        OrderChatSocket.disconnect()
         if (!::prefs.isInitialized) return
         prefs.edit().clear().apply()
     }

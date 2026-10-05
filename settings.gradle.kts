@@ -33,3 +33,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "U-DO"
 include(":app")
+
+// Shared chat code (Android counterpart of BirdyKit)
+include(":birdykit")
+project(":birdykit").projectDir = file("../BirdyKitAndroid/birdykit")

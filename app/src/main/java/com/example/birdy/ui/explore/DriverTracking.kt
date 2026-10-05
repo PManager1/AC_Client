@@ -115,6 +115,7 @@ fun DriverTrackingScreen(
     // Options menu
     var showOptionsMenu by remember { mutableStateOf(false) }
     var showCancelAlert by remember { mutableStateOf(false) }
+    var showChat by remember { mutableStateOf(false) }
 
     // Mapbox Map references
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
@@ -444,8 +445,17 @@ fun DriverTrackingScreen(
     if (showOptionsMenu) {
         RideOptionsBottomSheet(
             onDismiss = { showOptionsMenu = false },
+            onMessageDriver = {
+                showOptionsMenu = false
+                showChat = true
+            },
             onCancelOrder = { showCancelAlert = true }
         )
+    }
+
+    // MARK: - Message Driver → order chat
+    if (showChat) {
+        OrderChatSheet(onClose = { showChat = false })
     }
 
     // MARK: - Cancel Order Alert (matches iOS .alert)
@@ -715,6 +725,7 @@ private fun easeInOut(t: Double): Double {
 @Composable
 private fun RideOptionsBottomSheet(
     onDismiss: () -> Unit,
+    onMessageDriver: () -> Unit,
     onCancelOrder: () -> Unit
 ) {
     ModalBottomSheet(
@@ -745,7 +756,7 @@ private fun RideOptionsBottomSheet(
             RideOptionItem(
                 icon = { Icon(Icons.Default.Email, contentDescription = null, tint = Color(0xFF2196F3)) },
                 title = "Message Driver",
-                onClick = onDismiss
+                onClick = onMessageDriver
             )
             RideOptionItem(
                 icon = { Icon(Icons.Default.Call, contentDescription = null, tint = Color(0xFF4CAF50)) },

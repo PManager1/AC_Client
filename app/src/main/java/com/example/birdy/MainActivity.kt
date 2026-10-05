@@ -1,5 +1,6 @@
 package com.example.birdy
 
+import com.birdy.kit.chat.OrderChat
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -91,6 +92,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AuthManager.init(applicationContext)
+        // Order chat (BirdyKitAndroid) uses our udo3 session.
+        OrderChat.configure(Config.API_BASE_URL, { AuthManager.getToken() }, { AuthManager.getUserID() })
         // Initialize Stripe SDK — matches iOS AppDelegate stripeInit()
         PaymentConfiguration.init(applicationContext, Config.STRIPE_PUBLISHABLE_KEY)
         enableEdgeToEdge()
