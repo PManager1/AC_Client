@@ -18,8 +18,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import com.example.birdy.data.FeedRestaurant
-import com.example.birdy.data.FeedSection
 import android.content.Context
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -131,14 +129,6 @@ fun HomeFDScreen(
     var groceryStores by remember { mutableStateOf<List<GroceryStore>>(emptyList()) }
     var isLoadingGroceryStores by remember { mutableStateOf(false) }
 
-    // Drink brands (tag-filtered from /brands)
-    var drinkBrands by remember { mutableStateOf<List<FeedRestaurant>>(emptyList()) }
-    var isLoadingDrinkBrands by remember { mutableStateOf(false) }
-
-    // Food brands (tag-filtered from /brands)
-    var foodBrands by remember { mutableStateOf<List<FeedRestaurant>>(emptyList()) }
-    var isLoadingFoodBrands by remember { mutableStateOf(false) }
-
     // Favorites — shared source of truth across all tabs
     var favoriteRestaurantIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
@@ -170,41 +160,61 @@ fun HomeFDScreen(
         }
     }
 
-    // API-driven data
-    var homeFeed by remember { mutableStateOf<HomeFeedData?>(null) }
-    var isLoadingFeed by remember { mutableStateOf(true) }
-    var feedError by remember { mutableStateOf<String?>(null) }
+    // Home feed per tab ("All" / "Food" / "Drinks"), all from /homefeed?category=... (matches iOS)
+    val feedCategories = remember { setOf("All", "Food", "Drinks") }
+    var feeds by remember { mutableStateOf<Map<String, HomeFeedData>>(emptyMap()) }
+    var loadingCategories by remember { mutableStateOf(setOf("All")) } // "All" loads on appear
+    var feedErrors by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     var feedRetryKey by remember { mutableIntStateOf(0) }
 
-    // Shared loader for the home feed — updates loading/error/success state.
-    suspend fun loadHomeFeed() {
-        if (!isLoadingFeed) isLoadingFeed = true
+    // One endpoint for All / Food / Drinks; the backend filters by category and location.
+    suspend fun loadHomeFeed(category: String) {
+        if (category !in feedCategories) return
+        loadingCategories = loadingCategories + category
+        val addr = DeliveryAddressManager.selectedAddress
+        val hasCoords = addr != null && (addr.latitude != 0.0 || addr.longitude != 0.0)
         val result = withContext(Dispatchers.IO) {
-            HomeFDData.fetchHomeFeed()
+            HomeFDData.fetchHomeFeed(
+                category = category,
+                lat = if (hasCoords) addr!!.latitude else null,
+                lng = if (hasCoords) addr!!.longitude else null
+            )
         }
         when (result.status) {
             com.example.birdy.data.HomeFeedStatus.SUCCESS -> {
-                homeFeed = result.data
-                feedError = null
-                println("✅ [HomeFDScreen] Loaded home feed: ${result.data?.featuredBanners?.size} banners, ${result.data?.sections?.size} sections")
+                val data = result.data ?: HomeFeedData(emptyList(), emptyList())
+                feeds = feeds + (category to data)
+                feedErrors = feedErrors - category
+                data.sections.flatMap { it.restaurants }.filter { it.isFavorited }.forEach {
+                    favoriteRestaurantIds = favoriteRestaurantIds + it.id
+                }
+                println("✅ [HomeFDScreen] Loaded $category feed: ${data.featuredBanners.size} banners, ${data.sections.firstOrNull()?.restaurants?.size ?: 0} cards")
             }
             com.example.birdy.data.HomeFeedStatus.AUTH_ERROR -> {
-                homeFeed = null
-                feedError = "Couldn't load — please sign in and try again."
-                println("⚠️ [HomeFDScreen] Auth error loading home feed")
+                feedErrors = feedErrors + (category to "Couldn't load — please sign in and try again.")
+                println("⚠️ [HomeFDScreen] Auth error loading $category feed")
             }
             com.example.birdy.data.HomeFeedStatus.NETWORK_ERROR -> {
-                homeFeed = null
-                feedError = "Couldn't load. Check your connection and try again."
-                println("⚠️ [HomeFDScreen] Network error loading home feed")
+                feedErrors = feedErrors + (category to "Couldn't load. Check your connection and try again.")
+                println("⚠️ [HomeFDScreen] Network error loading $category feed")
             }
         }
-        isLoadingFeed = false
+        loadingCategories = loadingCategories - category
     }
 
-    // Fetch home feed from API on appear and when retry is requested
-    LaunchedEffect(Unit, feedRetryKey) {
-        loadHomeFeed()
+    // Load the selected tab's feed on appear, on tab change (if not cached) and on retry
+    LaunchedEffect(selectedMainCategory, feedRetryKey) {
+        if (selectedMainCategory in feedCategories && selectedMainCategory !in feeds) {
+            loadHomeFeed(selectedMainCategory)
+        }
+    }
+
+    // New location → cached feeds are stale (matches iOS onChange of selectedAddress)
+    LaunchedEffect(selectedAddressId) {
+        if (selectedAddressId != null) {
+            feeds = emptyMap()
+            loadHomeFeed(selectedMainCategory)
+        }
     }
 
     // Load default address on startup (matches iOS loadDefaultAddress)
@@ -270,50 +280,15 @@ fun HomeFDScreen(
         }
     }
 
-    // Auto-reload data when connectivity returns after being lost (matches iOS onReachable)
+    // Auto-reload data when connectivity returns after being lost (matches iOS onReceive isConnected)
     var wasOffline by remember { mutableStateOf(false) }
     LaunchedEffect(isNetworkConnected) {
         if (isNetworkConnected && wasOffline) {
-            withContext(Dispatchers.IO) {
-                val result = HomeFDData.fetchHomeFeed()
-                if (result.status == com.example.birdy.data.HomeFeedStatus.SUCCESS) {
-                    homeFeed = result.data
-                    feedError = null
-                } else {
-                    feedError = "Couldn't load. Check your connection and try again."
-                }
-            }
+            feeds = emptyMap()
+            loadHomeFeed(selectedMainCategory)
             wasOffline = false
         } else if (!isNetworkConnected) {
             wasOffline = true
-        }
-    }
-
-    // Fetch drink brands when Drinks tab is selected
-    LaunchedEffect(selectedMainCategory) {
-        if (selectedMainCategory == "Drinks" && drinkBrands.isEmpty()) {
-            isLoadingDrinkBrands = true
-            val brands = withContext(Dispatchers.IO) {
-                HomeFDData.fetchTaggedFeedRestaurants(HomeFDData.drinkTags)
-            }
-            drinkBrands = brands
-            isLoadingDrinkBrands = false
-            brands.forEach { if (it.isFavorited) favoriteRestaurantIds = favoriteRestaurantIds + it.id }
-            println("✅ [HomeFDScreen] Loaded ${brands.size} drink-tagged brands")
-        }
-    }
-
-    // Fetch food brands when Food tab is selected
-    LaunchedEffect(selectedMainCategory) {
-        if (selectedMainCategory == "Food" && foodBrands.isEmpty()) {
-            isLoadingFoodBrands = true
-            val brands = withContext(Dispatchers.IO) {
-                HomeFDData.fetchTaggedFeedRestaurants(HomeFDData.foodTags)
-            }
-            foodBrands = brands
-            isLoadingFoodBrands = false
-            brands.forEach { if (it.isFavorited) favoriteRestaurantIds = favoriteRestaurantIds + it.id }
-            println("✅ [HomeFDScreen] Loaded ${brands.size} food-tagged brands")
         }
     }
 
@@ -419,13 +394,17 @@ fun HomeFDScreen(
                 }
             }
 
-            // MARK: - Food Feed Content (only when Food tab selected)
-            if (selectedMainCategory == "All" || selectedMainCategory == "Food" || selectedMainCategory == "Drinks") {
+            // MARK: - Feed content for All / Food / Drinks (one /homefeed call per tab)
+            if (selectedMainCategory in feedCategories) {
+                val feed = feeds[selectedMainCategory]
+                val isLoadingFeed = feed == null && selectedMainCategory in loadingCategories
+                val feedError = feedErrors[selectedMainCategory]
+
                 // Featured Banners or Skeleton
                 if (isLoadingFeed) {
                     SkeletonPromoBanner(modifier = Modifier.padding(horizontal = 16.dp))
                 } else {
-                    homeFeed?.featuredBanners?.forEach { banner ->
+                    feed?.featuredBanners?.forEach { banner ->
                         DynamicPromoBannerView(
                             banner = banner,
                             modifier = Modifier.padding(horizontal = 16.dp)
@@ -436,41 +415,24 @@ fun HomeFDScreen(
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Dynamic Sections or Skeletons
-                if (isLoadingFeed || (selectedMainCategory == "Drinks" && isLoadingDrinkBrands) || (selectedMainCategory == "Food" && isLoadingFoodBrands)) {
+                if (isLoadingFeed) {
                     SkeletonFeedSection(modifier = Modifier.padding(horizontal = 0.dp))
                     SkeletonFeedSection(modifier = Modifier.padding(horizontal = 0.dp))
-                } else if (feedError != null && selectedMainCategory == "All") {
+                } else if (feed == null && feedError != null) {
                     FeedErrorCard(
-                        message = feedError!!,
+                        message = feedError,
                         onRetry = { feedRetryKey++ }
                     )
                 } else {
-                    val sections = when (selectedMainCategory) {
-                        "Drinks" -> listOf(
-                            FeedSection("Fastest near you", drinkBrands),
-                            FeedSection("Most loved", drinkBrands),
-                            FeedSection("Most Popular local", drinkBrands)
-                        )
-                        "Food" -> listOf(
-                            FeedSection("Fastest near you", foodBrands),
-                            FeedSection("Most loved", foodBrands),
-                            FeedSection("Most Popular local", foodBrands)
-                        )
-                        else -> homeFeed?.sections ?: emptyList()
-                    }
-                    sections.forEach { section ->
+                    feed?.sections?.forEach { section ->
                         FeedRestaurantSection(
                             title = section.heading,
                             restaurants = section.restaurants,
                             favoriteIds = favoriteRestaurantIds,
                             onToggleFavorite = { id -> toggleFavorite(id, id !in favoriteRestaurantIds) },
-                            onRestaurantClick = { restaurant ->
-                                if (restaurant.isBrandItem) {
-                                    onGroceryStoreClick(restaurant.id, restaurant.restaurantName)
-                                } else {
-                                    onRestaurantClick(restaurant.id)
-                                }
-                            }
+                            // Every feed card is a brand: open its store page by brand id
+                            // (iOS: AppRoute.BrandStore(brandId:)), same as search results.
+                            onRestaurantClick = { restaurant -> onRestaurantClick(restaurant.id) }
                         )
 
                         Spacer(modifier = Modifier.height(24.dp))
@@ -486,6 +448,7 @@ fun HomeFDScreen(
             SelectAddressSheet(
                 currentAddressId = selectedAddressId,
                 onAddressSelected = { address ->
+                    DeliveryAddressManager.selectAddress(address)
                     selectedAddress = address.street
                     selectedAddressId = address.id
                 },
@@ -509,62 +472,16 @@ fun HomeFDScreen(
             )
         }
 
-        // MARK: - Zone Banner
-        if (DeliveryAddressManager.showZoneBanner.value) {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 8.dp)
-            ) {
-                ZoneBanner(
-                    onDismiss = { DeliveryAddressManager.dismissZoneBanner() },
-                    onSubmit = { email, phone ->
-                        submitZoneInterest(context, email, phone)
-                    }
-                )
-            }
+        // MARK: - Not in our area yet (same screen as the web modal and iOS)
+        DeliveryAddressManager.zoneResult.value?.let { result ->
+            OutOfZoneSheet(
+                result = result,
+                onTryAnother = {
+                    DeliveryAddressManager.dismissZone()
+                    showAddressSheet = true
+                },
+                onDone = { DeliveryAddressManager.dismissZone() }
+            )
         }
     }
-}
-
-private fun submitZoneInterest(context: android.content.Context, email: String, phone: String) {
-    val addr = com.example.birdy.data.DeliveryAddressManager.selectedAddress ?: return
-    var zipCode = com.example.birdy.data.DeliveryAddressManager.extractZip(addr.cityStateZip)
-    if (zipCode.isEmpty() && addr.latitude != 0.0 && addr.longitude != 0.0) {
-        try {
-            val geocoder = android.location.Geocoder(context, java.util.Locale.getDefault())
-            val results = geocoder.getFromLocation(addr.latitude, addr.longitude, 1)
-            if (!results.isNullOrEmpty()) zipCode = results[0].postalCode ?: ""
-        } catch (e: Exception) {
-            Log.e("HomeFD", "Geocoder error: ${e.message}")
-        }
-    }
-    if (zipCode.isEmpty()) {
-        Log.w("HomeFD", "⚠️ Could not determine zip code — skipping zone interest")
-        return
-    }
-    Thread {
-        try {
-            val json = JSONObject().apply {
-                put("email", email)
-                put("phone", phone)
-                put("zipCode", zipCode)
-                put("latitude", addr.latitude)
-                put("longitude", addr.longitude)
-            }
-            val url = URL("${com.example.birdy.data.Config.API_BASE_URL}/zone-interest")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
-            conn.outputStream.write(json.toString().toByteArray())
-            val code = conn.responseCode
-            val responseBody = if (code in 200..299) conn.inputStream.bufferedReader().readText()
-                              else conn.errorStream.bufferedReader().readText()
-            conn.disconnect()
-            Log.d("HomeFD", "Zone interest submitted: HTTP $code — $responseBody")
-        } catch (e: Exception) {
-            Log.e("HomeFD", "Zone interest error: ${e.message}")
-        }
-    }.start()
 }

@@ -379,12 +379,12 @@ private suspend fun fetchTagPlaces(
             for (i in 0 until sectionsArray.length()) {
                 val section = sectionsArray.getJSONObject(i)
                 val sectionId = section.optString("id", "")
-                val sectionName = section.optString("name", "")
-                val logoUrl = section.optString("logoUrl", "").takeIf { it.isNotEmpty() }
+                val sectionName = section.str("name")
+                val logoUrl = section.str("logoUrl").takeIf { it.isNotEmpty() }
 
                 val carouselArray = section.optJSONArray("carouselImages")
                 val carouselImages = if (carouselArray != null) {
-                    (0 until carouselArray.length()).mapNotNull { carouselArray.optString(it).takeIf { it.isNotEmpty() } }
+                    (0 until carouselArray.length()).mapNotNull { if (carouselArray.isNull(it)) null else carouselArray.optString(it).takeIf { it.isNotEmpty() } }
                 } else emptyList()
 
                 val imageTags = mutableMapOf<String, List<String>>()
@@ -412,7 +412,7 @@ private suspend fun fetchTagPlaces(
                 val availableItems = mutableListOf<JSONObject>()
                 if (taggedArray != null) {
                     for (j in 0 until taggedArray.length()) {
-                        val taggedItem = taggedArray.getJSONObject(j)
+                        val taggedItem = taggedArray.optJSONObject(j) ?: continue
                         if (taggedItem.optBoolean("available", false)) {
                             availableItems.add(taggedItem)
                         }
@@ -421,9 +421,9 @@ private suspend fun fetchTagPlaces(
 
                 if (availableItems.isNotEmpty()) {
                     for (taggedItem in availableItems) {
-                        val itemName = taggedItem.optString("name", "")
+                        val itemName = taggedItem.str("name")
                         val itemPrice = taggedItem.optDouble("price", 0.0)
-                        val itemImageUrl = taggedItem.optString("imageUrl", "").takeIf { it.isNotEmpty() }
+                        val itemImageUrl = taggedItem.str("imageUrl").takeIf { it.isNotEmpty() }
 
                         val images = if (itemImageUrl != null) listOf(itemImageUrl) else filteredImages
 
@@ -474,3 +474,6 @@ private suspend fun fetchTagPlaces(
         }
     }
 }
+
+/** optString returns the literal "null" for JSON null (e.g. a brand with no logo); this returns "" instead, like iOS. */
+private fun JSONObject.str(key: String): String = if (isNull(key)) "" else optString(key, "")

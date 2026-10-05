@@ -4,9 +4,11 @@ import android.util.Log
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import com.example.birdy.ui.fooddelivery.Address
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 object DeliveryAddressManager {
 
@@ -14,8 +16,15 @@ object DeliveryAddressManager {
         private set
     var useCurrentLocation: Boolean = true
         private set
-    var showZoneBanner: MutableState<Boolean> = mutableStateOf(false)
+
+    /**
+     * Set when the selected address (or current location) isn't served.
+     * HomeFD shows OutOfZoneSheet for it; null hides it.
+     */
+    var zoneResult: MutableState<ZoneCheckResult?> = mutableStateOf(null)
         private set
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun currentCoordinates(gpsLat: Double, gpsLng: Double): Pair<Double, Double> {
         if (useCurrentLocation || selectedAddress == null) return Pair(gpsLat, gpsLng)
@@ -35,41 +44,37 @@ object DeliveryAddressManager {
         selectedAddress = null
     }
 
-    fun dismissZoneBanner() {
-        showZoneBanner.value = false
+    fun dismissZone() {
+        zoneResult.value = null
     }
 
+    /**
+     * Same check as the web and iOS: saved addresses by id (the server uses its
+     * own coordinates), the phone's location by lat/lng.
+     */
     private fun checkZone(address: Address) {
-        if (address.id == "current_location") return
-        val lat = address.latitude
-        val lng = address.longitude
-        if (lat == 0.0 && lng == 0.0) { showZoneBanner.value = false; return }
+        val token = AuthManager.getToken()
+        val isCurrentLocation = address.id == "current_location"
+        if (token.isNullOrEmpty() || (isCurrentLocation && address.latitude == 0.0 && address.longitude == 0.0)) {
+            zoneResult.value = null
+            return
+        }
 
-        Thread {
-            try {
-                val json = JSONObject().apply {
-                    put("latitude", lat)
-                    put("longitude", lng)
+        scope.launch {
+            val result = try {
+                if (isCurrentLocation) {
+                    ServiceAreaService.checkLocation(address.latitude, address.longitude, token)
+                } else {
+                    ServiceAreaService.checkSavedAddress(address.id, token)
                 }
-                val url = URL("${Config.API_BASE_URL}/check-zone")
-                val conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.doOutput = true
-                conn.outputStream.write(json.toString().toByteArray())
-                val response = conn.inputStream.bufferedReader().readText()
-                conn.disconnect()
-                val result = JSONObject(response)
-                showZoneBanner.value = !result.optBoolean("insideZone", true)
             } catch (e: Exception) {
                 Log.e("DeliveryAddressManager", "checkZone error: ${e.message}")
-                showZoneBanner.value = false
+                null
             }
-        }.start()
-    }
-
-    fun extractZip(cityStateZip: String): String {
-        val match = Regex("\\b(\\d{5}(?:-\\d{4})?)\\b").find(cityStateZip)
-        return match?.groupValues?.getOrNull(1) ?: ""
+            withContext(Dispatchers.Main) {
+                // "Couldn't verify" isn't shown as a blocker here; save and checkout re-check.
+                zoneResult.value = result?.takeUnless { it.inZone || it.couldNotVerify }
+            }
+        }
     }
 }

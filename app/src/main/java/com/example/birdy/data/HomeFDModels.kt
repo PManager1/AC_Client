@@ -326,72 +326,26 @@ object HomeFDData {
         }
     }
 
-    // Drink tags matching Drinks subcategories
-    val drinkTags = listOf("coffee", "bubble_tea", "juice", "smoothie", "soda", "tea", "energy_drink", "milkshake", "lemonade")
-
-    // Food tags matching Food subcategories
-    val foodTags = listOf("fast_food", "pizza", "burger", "chicken", "dessert", "healthy", "indian", "chinese", "pho", "mexican", "korean", "soup", "sandwich", "asian", "halal", "thai", "salad", "seafood", "japanese")
-
-    /** Fetch brands from /brands and filter by any of the given tags. Converts to FeedRestaurant */
-    fun fetchTaggedFeedRestaurants(tags: List<String>): List<FeedRestaurant> {
-        return try {
-            val connection = openAuthedGet("$API_BASE_URL/brands")
-            val json = bodyOf(connection)
-            connection.disconnect()
-            val array = JSONArray(json)
-            (0 until array.length()).mapNotNull { i ->
-                val obj = array.getJSONObject(i)
-                val brandTags = obj.optJSONArray("tags")
-                if (brandTags == null) return@mapNotNull null
-                val matched = (0 until brandTags.length()).any { j -> tags.contains(brandTags.getString(j)) }
-                if (!matched) return@mapNotNull null
-
-                val brandId = obj.optString("id", "")
-                val brandName = obj.optString("name", "")
-                val logoUrl = obj.optString("logoUrl", "")
-                val carouselArray = obj.optJSONArray("carouselImages")
-                val carousel = if (carouselArray != null) {
-                    (0 until carouselArray.length()).map { carouselArray.getString(it) }
-                } else emptyList()
-                val images = if (carousel.isEmpty()) {
-                    if (logoUrl.isEmpty()) emptyList() else listOf(logoUrl)
-                } else carousel
-
-                FeedRestaurant(
-                    id = brandId,
-                    restaurantName = brandName,
-                    logoURL = logoUrl,
-                    images = images,
-                    rating = 4.5,
-                    reviewCount = 100,
-                    distance = 1.0,
-                    deliveryTime = 20,
-                    deliveryFee = 0.0,
-                    promoText = "",
-                    isSponsored = false,
-                    foodItems = emptyList(),
-                    isNew = false,
-                    phone = "",
-                    isBrandItem = true,
-                    isFavorited = obj.optBoolean("is_favorite", false)
-                )
-            }
-        } catch (e: Exception) {
-            println("❌ [HomeFDData] Failed to fetch /brands for tags: ${e.message}")
-            emptyList()
-        }
-    }
-
     // MARK: - Load Home Feed from API
+
+    /**
+     * Same URL iOS builds in Home.swift loadHomeFeed: one endpoint for All / Food / Drinks,
+     * filtered server-side by category, active polygons and (when known) distance.
+     */
+    internal fun homeFeedUrl(category: String, lat: Double?, lng: Double?): String {
+        var url = "$API_BASE_URL/homefeed?category=${category.lowercase()}&filterByActivePolygons=true"
+        if (lat != null && lng != null) url += "&lat=$lat&lng=$lng&maxDistance=10"
+        return url
+    }
 
     /**
      * Blocking network call — must be called from a background thread (e.g. IO dispatcher).
      * Returns a result that distinguishes success, auth failures, and network errors so the
      * UI can show a meaningful error/retry instead of a silent blank feed.
      */
-    fun fetchHomeFeed(): HomeFeedResult {
+    fun fetchHomeFeed(category: String, lat: Double? = null, lng: Double? = null): HomeFeedResult {
         return try {
-            val connection = openAuthedGet("$API_BASE_URL/homefeed")
+            val connection = openAuthedGet(homeFeedUrl(category, lat, lng))
             val code = codeOf(connection)
             val json = bodyOf(connection)
             connection.disconnect()
@@ -410,77 +364,72 @@ object HomeFDData {
         }
     }
 
-    private fun parseHomeFeed(json: String): HomeFeedData {
+    /** optString returns the literal "null" for JSON null; this returns the fallback instead. */
+    private fun JSONObject.str(key: String, fallback: String = ""): String =
+        if (isNull(key)) fallback else optString(key, fallback)
+
+    private fun JSONArray?.objects(): List<JSONObject> =
+        if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }
+
+    private fun JSONArray?.strings(): List<String> =
+        if (this == null) emptyList() else (0 until length()).mapNotNull { i -> if (isNull(i)) null else optString(i) }
+
+    /**
+     * Parses /homefeed (udo3 HomeFeedJSON). Missing or null fields fall back to defaults,
+     * so one odd card can't throw away the whole feed.
+     */
+    internal fun parseHomeFeed(json: String): HomeFeedData {
         val root = JSONObject(json)
 
-        // Parse banners
-        val bannersArray = root.optJSONArray("featured_banners") ?: org.json.JSONArray()
-        val banners = (0 until bannersArray.length()).map { i ->
-            val b = bannersArray.getJSONObject(i)
-            val colorsArray = b.optJSONArray("gradient_colors")
-            val colors = if (colorsArray != null) {
-                (0 until colorsArray.length()).map { colorsArray.getString(it) }
-            } else emptyList()
-
+        val banners = root.optJSONArray("featured_banners").objects().map { b ->
             FeaturedBanner(
-                id = b.optString("id"),
-                title = b.optString("title"),
-                subtitle = b.optString("subtitle"),
-                gradientColors = colors,
-                actionText = b.optString("action_text"),
-                imageUrl = b.optString("image_url")
+                id = b.str("id"),
+                title = b.str("title"),
+                subtitle = b.str("subtitle"),
+                gradientColors = b.optJSONArray("gradient_colors").strings(),
+                actionText = b.str("action_text"),
+                imageUrl = b.str("image_url")
             )
         }
 
-        // Parse sections
-        val sectionsArray = root.getJSONArray("sections")
-        val sections = (0 until sectionsArray.length()).map { i ->
-            val s = sectionsArray.getJSONObject(i)
-            val heading = s.optString("heading")
-            val restaurantsArray = s.getJSONArray("restaurants")
-            val restaurants = (0 until restaurantsArray.length()).map { j ->
-                val r = restaurantsArray.getJSONObject(j)
-                val imagesArray = r.optJSONArray("images")
-                val images = if (imagesArray != null) {
-                    (0 until imagesArray.length()).map { imagesArray.getString(it) }
-                } else emptyList()
+        val sections = root.optJSONArray("sections").objects().map { s ->
+            val restaurants = s.optJSONArray("restaurants").objects().mapNotNull { r ->
+                val id = r.str("id")
+                if (id.isEmpty()) return@mapNotNull null
 
-                // Parse food items (API returns "items" array of objects)
-                val itemsArray = r.optJSONArray("items") ?: r.optJSONArray("foodItems")
-                val foodItems = if (itemsArray != null) {
-                    (0 until itemsArray.length()).map { k ->
-                        val item = itemsArray.getJSONObject(k)
-                        FeedFoodItem(
-                            id = item.optString("id"),
-                            name = item.optString("name"),
-                            basePrice = item.optDouble("basePrice", 0.0),
-                            imageURL = item.optString("imageUrl", ""),
-                            isAvailable = item.optBoolean("isAvailable", true),
-                            promoText = item.optString("promoText", ""),
-                            isSponsored = item.optBoolean("isSponsored", false)
-                        )
-                    }
-                } else emptyList()
+                // iOS decodes "foodItems"; older payloads used "items".
+                val foodItems = (r.optJSONArray("foodItems") ?: r.optJSONArray("items")).objects().map { item ->
+                    FeedFoodItem(
+                        id = item.str("id"),
+                        name = item.str("name"),
+                        basePrice = item.optDouble("basePrice", 0.0),
+                        imageURL = item.str("imageUrl"),
+                        isAvailable = item.optBoolean("isAvailable", true),
+                        promoText = item.str("promoText"),
+                        isSponsored = item.optBoolean("isSponsored", false)
+                    )
+                }
 
                 FeedRestaurant(
-                    id = r.optString("id"),
-                    restaurantName = r.optString("restaurantName"),
-                    logoURL = r.optString("logoURL", ""),
-                    images = images,
+                    id = id,
+                    restaurantName = r.str("restaurantName"),
+                    logoURL = r.str("logoURL"),
+                    images = r.optJSONArray("images").strings(),
                     rating = r.optDouble("rating", 0.0),
                     reviewCount = r.optInt("reviewCount", 0),
                     distance = r.optDouble("distance", 0.0),
                     deliveryTime = r.optInt("deliveryTime", 30),
                     deliveryFee = r.optDouble("deliveryFee", 0.0),
-                    promoText = r.optString("promoText", ""),
+                    promoText = r.str("promoText"),
                     isSponsored = r.optBoolean("isSponsored", false),
                     foodItems = foodItems,
                     isNew = r.optBoolean("isNew", false),
-                    phone = r.optString("phone", ""),
-                    isFavorited = r.optBoolean("is_favorite", false)
+                    phone = r.str("phone"),
+                    isBrandItem = r.optBoolean("isBrandItem", false),
+                    isFavorited = r.optBoolean("isFavorited", r.optBoolean("is_favorite", false))
                 )
             }
-            FeedSection(heading = heading, restaurants = restaurants)
+            FeedSection(heading = s.str("heading"), restaurants = restaurants)
         }
 
         return HomeFeedData(featuredBanners = banners, sections = sections)

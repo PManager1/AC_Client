@@ -57,6 +57,7 @@ object AddressService {
         }
     }
 
+    /** Throws [ServiceAreaException] when the server rejects the address (422); null on other failures. */
     fun createAddress(
         street: String,
         cityStateZip: String,
@@ -118,14 +119,19 @@ object AddressService {
             } else {
                 val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "No details"
                 println("❌ [AddressService] Failed to create address. Status: $responseCode. Body: $errorBody")
+                // Outside the delivery area / service paused / unverifiable: let the UI show OutOfZoneSheet
+                ServiceAreaException.parse(responseCode, errorBody)?.let { throw it }
                 null
             }
+        } catch (e: ServiceAreaException) {
+            throw e
         } catch (e: Exception) {
             println("❌ [AddressService] Failed to create address: ${e.message}")
             null
         }
     }
 
+    /** Throws [ServiceAreaException] when the server rejects the address (422); null on other failures. */
     fun updateAddress(
         id: String,
         street: String,
@@ -188,8 +194,12 @@ object AddressService {
             } else {
                 val errorBody = connection.errorStream?.bufferedReader()?.use { it.readText() } ?: "No details"
                 println("❌ [AddressService] Failed to update address. Status: $responseCode. Body: $errorBody")
+                // Outside the delivery area / service paused / unverifiable: let the UI show OutOfZoneSheet
+                ServiceAreaException.parse(responseCode, errorBody)?.let { throw it }
                 null
             }
+        } catch (e: ServiceAreaException) {
+            throw e
         } catch (e: Exception) {
             println("❌ [AddressService] Failed to update address: ${e.message}")
             null

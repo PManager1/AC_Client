@@ -74,6 +74,10 @@ import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
 import com.mapbox.maps.plugin.gestures.gestures
 import com.example.birdy.ui.account.Wallet
 import com.example.birdy.ui.fooddelivery.SelectAddressSheet
+import com.example.birdy.ui.fooddelivery.OutOfZoneSheet
+import com.example.birdy.data.ServiceAreaException
+import com.example.birdy.data.ServiceAreaService
+import com.example.birdy.data.ZoneCheckResult
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -130,6 +134,7 @@ fun CheckoutScreen(
     var showOrderSuccess by remember { mutableStateOf(false) }
     var isPlacingOrder by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+    var zoneResult by remember { mutableStateOf<ZoneCheckResult?>(null) }
     var showTipPage by remember { mutableStateOf(false) }
     var showWallet by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf("Delivery") }
@@ -295,6 +300,8 @@ fun CheckoutScreen(
                 put("leaveAtDoor", leaveAtDoor)
                 put("paymentMethodId", selectedPayment.id)
                 put("paymentType", if (selectedPayment.id == "gpay") "google_pay" else "saved_card")
+                // The server checks the service area against this saved address
+                if (addr.id.isNotEmpty() && addr.id != "current_location") put("addressId", addr.id)
             }
 
             println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -323,8 +330,9 @@ fun CheckoutScreen(
                 if (responseCode == 201 || responseCode == 200) {
                     val responseBody = connection.inputStream.bufferedReader().readText()
                     val json = JSONObject(responseBody)
-                    val orderId = json.optString("_id", "")
-                    val orderNumber = json.optInt("orderNumber", 0)
+                    // udo3 returns {"id": "<uuid>", "orderNumber": "UDO-XXXXXX", ...}
+                    val orderId = json.optString("id", "").ifEmpty { json.optString("_id", "") }
+                    val orderNumber = json.optString("orderNumber", "")
                     // Save to CartManager — matches iOS CartManager.shared.orderId / orderNumber
                     CartManager.orderId = orderId
                     CartManager.orderNumber = orderNumber
@@ -333,6 +341,8 @@ fun CheckoutScreen(
                 } else {
                     val errorBody = connection.errorStream?.bufferedReader()?.readText() ?: "Unknown error"
                     println("❌ [Checkout] Order creation failed (HTTP $responseCode): $errorBody")
+                    // Not served / service paused: no order was created, so never show success
+                    ServiceAreaException.parse(responseCode, errorBody)?.let { throw it }
                     "error: HTTP $responseCode"
                 }
             }
@@ -345,6 +355,21 @@ fun CheckoutScreen(
             // Show success animation
             showOrderSuccess = true
 
+        } catch (e: ServiceAreaException) {
+            println("📍 [Checkout] Order blocked: ${e.code}")
+            // Prefer the full "not here yet" sheet; fall back to the server message
+            val zone = selectedAddress?.id?.let { id ->
+                try {
+                    withContext(Dispatchers.IO) { ServiceAreaService.checkSavedAddress(id, token) }
+                } catch (_: Exception) {
+                    null
+                }
+            }
+            if (zone != null && !zone.inZone && !zone.couldNotVerify) {
+                zoneResult = zone
+            } else {
+                errorMessage = e.message ?: "We don't deliver to this address yet."
+            }
         } catch (e: Exception) {
             println("❌ [Checkout] Failed to create order: ${e.message}")
             // Still proceed — don't block the user (matches iOS behavior)
@@ -524,6 +549,18 @@ fun CheckoutScreen(
                                 showSelectAddress = false
                             },
                             onDismiss = { showSelectAddress = false }
+                        )
+                    }
+
+                    // Delivery address isn't served: same sheet as the web modal and iOS
+                    zoneResult?.let { result ->
+                        OutOfZoneSheet(
+                            result = result,
+                            onTryAnother = {
+                                zoneResult = null
+                                showSelectAddress = true
+                            },
+                            onDone = { zoneResult = null }
                         )
                     }
 

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -62,6 +63,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.birdy.data.AddressService
 import com.example.birdy.data.AuthManager
+import com.example.birdy.data.ServiceAreaException
+import com.example.birdy.data.ServiceAreaService
+import com.example.birdy.data.ZoneCheckResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -119,6 +123,52 @@ fun SelectAddressSheet(
     var customLabel by remember { mutableStateOf("") }
     var isGifting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    // Service-area check (same flow as the web address modal and iOS)
+    var zoneResult by remember { mutableStateOf<ZoneCheckResult?>(null) }
+    var isCheckingZone by remember { mutableStateOf(false) }
+    var inlineMessage by remember { mutableStateOf<String?>(null) }
+
+    /** Checks an address, then runs [onInZone] or shows OutOfZoneSheet / an inline message. */
+    fun checkThen(check: (String) -> ZoneCheckResult, onInZone: () -> Unit) {
+        val token = AuthManager.getToken(context)
+        if (token.isNullOrEmpty()) {
+            inlineMessage = "Not authenticated. Please sign in and try again."
+            return
+        }
+        inlineMessage = null
+        isCheckingZone = true
+        scope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) { check(token) }
+                when {
+                    result.inZone -> onInZone()
+                    result.couldNotVerify -> {
+                        pendingAddressData = null
+                        inlineMessage = result.message ?: "We couldn't find that address. Try another one."
+                    }
+                    else -> {
+                        pendingAddressData = null
+                        zoneResult = result
+                    }
+                }
+            } catch (e: Exception) {
+                pendingAddressData = null
+                inlineMessage = e.message ?: "Couldn't check this address. Please try again."
+            } finally {
+                isCheckingZone = false
+            }
+        }
+    }
+
+    /** The server rejected a save (e.g. the address changed after the check): same sheet. */
+    fun showRejected(e: ServiceAreaException, address: String) {
+        if (e.code == "geocode_failed") {
+            inlineMessage = e.message ?: "We couldn't verify that address. Please try again."
+        } else {
+            zoneResult = e.toZoneCheckResult(address)
+        }
+    }
 
     // Addresses fetched from API
     val localAddresses = remember { mutableStateListOf<Address>() }
@@ -243,9 +293,12 @@ fun SelectAddressSheet(
                         gateCode = address.gateCode,
                         isSelected = selectedId == address.id,
                         onClick = {
-                            selectedId = address.id
-                            onAddressSelected(address)
-                            onDismiss()
+                            // Saved addresses can be outside the area too (saved before the check existed)
+                            checkThen({ token -> ServiceAreaService.checkSavedAddress(address.id, token) }) {
+                                selectedId = address.id
+                                onAddressSelected(address)
+                                onDismiss()
+                            }
                         },
                         onEditGateCode = {
                             editingAddressId = address.id
@@ -298,6 +351,30 @@ fun SelectAddressSheet(
                     )
                 }
 
+                if (isCheckingZone) {
+                    Row(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = Color(0xFFCC5500)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(text = "Checking address...", fontSize = 15.sp, color = Color.Black)
+                    }
+                }
+
+                inlineMessage?.let {
+                    Text(
+                        text = it,
+                        fontSize = 14.sp,
+                        color = Color.Red,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(40.dp))
             }
         }
@@ -324,6 +401,7 @@ fun SelectAddressSheet(
                             errorMessage = "Not authenticated. Please sign in and try again."
                         } else {
                             scope.launch {
+                              try {
                                 // Dedup: check if an address with the same street already exists
                                 val existingAddress = localAddresses.find { 
                                     it.street.equals(data.street, ignoreCase = true) 
@@ -384,6 +462,10 @@ fun SelectAddressSheet(
                                         errorMessage = "Failed to save address. Please try again."
                                     }
                                 }
+                              } catch (e: ServiceAreaException) {
+                                // Outside the delivery area (server is the final check)
+                                showRejected(e, "${data.street}, ${data.cityStateZip}")
+                              }
                                 pendingAddressData = null
                             }
                         }
@@ -427,8 +509,24 @@ fun SelectAddressSheet(
                 personalLabel = "none"
                 customLabel = ""
                 isGifting = false
-                showAddressTypeSheet = true
+                // Check the service area on selection, before the type/details/gate sheets
+                checkThen({ token -> ServiceAreaService.checkAddress(street, cityStateZip, token) }) {
+                    showAddressTypeSheet = true
+                }
             }
+        )
+    }
+
+    // MARK: - Not in our area yet
+    zoneResult?.let { result ->
+        OutOfZoneSheet(
+            result = result,
+            onTryAnother = {
+                zoneResult = null
+                isAddingNewAddress = true
+                showAddressSearch = true
+            },
+            onDone = { zoneResult = null }
         )
     }
 

@@ -31,7 +31,7 @@ object CartManager {
 
     // Order ID from backend — matches iOS CartManager.shared.orderId
     var orderId by mutableStateOf("")
-    var orderNumber by mutableStateOf(0)
+    var orderNumber by mutableStateOf("")   // e.g. "UDO-A1B2C3" from udo3
 
     // Bridge to present driver tracking map — matches iOS CartManager.shared.showDriverTracking
     var showDriverTracking by mutableStateOf(false)
