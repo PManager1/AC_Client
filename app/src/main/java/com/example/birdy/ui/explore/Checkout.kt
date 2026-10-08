@@ -72,7 +72,6 @@ import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
 import com.mapbox.maps.plugin.gestures.gestures
-import com.example.birdy.ui.account.Wallet
 import com.example.birdy.ui.fooddelivery.SelectAddressSheet
 import com.example.birdy.ui.fooddelivery.OutOfZoneSheet
 import com.example.birdy.data.ServiceAreaException
@@ -85,6 +84,11 @@ import kotlinx.coroutines.withContext
 import androidx.compose.runtime.derivedStateOf
 import com.example.birdy.data.LocationManager
 import org.json.JSONArray
+import com.stripe.android.PaymentConfiguration
+import com.stripe.android.paymentsheet.PaymentSheet
+import com.stripe.android.paymentsheet.PaymentSheetResult
+import com.stripe.android.paymentsheet.rememberPaymentSheet
+import java.security.MessageDigest
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -100,13 +104,6 @@ data class DeliveryAddress(
     val longitude: Double = 0.0
 )
 
-data class PaymentMethod(
-    val id: String,
-    val type: String,
-    val last4: String?,
-    val brandIcon: String
-)
-
 // MARK: - Checkout Screen (matches iOS Checkout view)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,20 +112,12 @@ fun CheckoutScreen(
     onBack: () -> Unit,
     onTrackOrder: () -> Unit = {}
 ) {
-    val paymentMethods = remember {
-        listOf(
-            PaymentMethod(id = "gpay", type = "Google Pay", last4 = null, brandIcon = "gpay"),
-            PaymentMethod(id = "visa", type = "Visa", last4 = "4242", brandIcon = "visa")
-        )
-    }
-
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var selectedAddress by remember { mutableStateOf<DeliveryAddress?>(null) }
     var isLoadingAddresses by remember { mutableStateOf(true) }
     var showSelectAddress by remember { mutableStateOf(false) }
-    var selectedPayment by remember { mutableStateOf(paymentMethods.first()) }
     var tipAmount by remember { mutableStateOf(4.0) }
     var leaveAtDoor by remember { mutableStateOf(true) }
     var showOrderSuccess by remember { mutableStateOf(false) }
@@ -136,7 +125,11 @@ fun CheckoutScreen(
     var errorMessage by remember { mutableStateOf("") }
     var zoneResult by remember { mutableStateOf<ZoneCheckResult?>(null) }
     var showTipPage by remember { mutableStateOf(false) }
-    var showWallet by remember { mutableStateOf(false) }
+    // The order waiting for its card hold to be confirmed in PaymentSheet.
+    var pendingOrder by remember { mutableStateOf<JSONObject?>(null) }
+    var holdNotice by remember { mutableStateOf<String?>(null) }
+    // New per checkout screen, so the same basket ordered again later is a new hold.
+    val idempotencySalt = remember { java.util.UUID.randomUUID().toString() }
     var selectedMode by remember { mutableStateOf("Delivery") }
     var userLat by remember { mutableStateOf(0.0) }
     var userLng by remember { mutableStateOf(0.0) }
@@ -245,118 +238,87 @@ fun CheckoutScreen(
         isLoadingCompetitorEstimate = false
     }
 
-    // MARK: - Place Order — calls POST /orders (matches iOS handlePlaceOrder)
-    suspend fun handlePlaceOrder() {
-        val token = AuthManager.getToken(context)
-        if (token.isNullOrEmpty()) {
-            errorMessage = "Not authenticated — please log in again."
-            return
+    // MARK: - Place Order (same flow as iOS handlePlaceOrder)
+    //
+    // 1. POST /payments/intents with the order: the server prices it and holds the card
+    //    for total + buffer (manual capture). 2. PaymentSheet confirms the card (3-D Secure
+    //    inside the sheet). 3. POST /orders with paymentIntentId. Only a 201 counts as
+    //    placed; if the server refuses, it releases the hold right away.
+
+    // Idempotency-Key for POST /payments/intents: the same order contents on this screen
+    // give the same key, so a retry after a timeout gets the same card hold back. Any change
+    // to items, tip, fees, address or total gives a new key (Stripe refuses a reused key
+    // with different params).
+    fun idempotencyKey(addressId: String): String {
+        val items = CartManager.items.joinToString(";") { item ->
+            listOf(
+                item.menuItem?.id ?: item.dishName, String.format("%.2f", item.price), "${item.quantity}",
+                item.selectedOptions.joinToString(","), item.specialInstructions
+            ).joinToString("|")
         }
+        val parts = listOf(
+            idempotencySalt, CartManager.restaurantId, items, addressId,
+            String.format("%.2f|%.2f|%.2f|%.2f", tipAmount, CartManager.deliveryFee, CartManager.serviceFee, totalWithTip)
+        )
+        val digest = MessageDigest.getInstance("SHA-256").digest(parts.joinToString("\n").toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
 
-        isPlacingOrder = true
-        errorMessage = ""
+    // POST with JSON; returns (HTTP status, body). Network errors throw.
+    fun postJson(path: String, body: JSONObject, token: String, headers: Map<String, String> = emptyMap()): Pair<Int, String> {
+        val connection = URL("${Config.API_BASE_URL}$path").openConnection() as HttpURLConnection
+        connection.requestMethod = "POST"
+        connection.setRequestProperty("Authorization", "Bearer $token")
+        connection.setRequestProperty("Content-Type", "application/json")
+        headers.forEach { (field, value) -> connection.setRequestProperty(field, value) }
+        connection.connectTimeout = 15000
+        connection.readTimeout = 30000
+        connection.doOutput = true
+        connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        val status = connection.responseCode
+        val text = (if (status in 200..299) connection.inputStream else connection.errorStream)
+            ?.bufferedReader()?.readText() ?: ""
+        return status to text
+    }
 
+    fun serverMessage(body: String): String =
+        try { JSONObject(body).optString("message", "") } catch (_: Exception) { "" }
+
+    // Step 3: the card is held; place the order. A retry with the same intent returns the
+    // same order, never a second one.
+    suspend fun submitOrder(order: JSONObject, token: String) {
         try {
-            // Build the order payload — matches iOS Checkout.swift orderPayload exactly
-            val itemsArray = JSONArray().apply {
-                CartManager.items.forEach { item ->
-                    put(JSONObject().apply {
-                        put("itemId", item.menuItem?.id ?: java.util.UUID.randomUUID().toString())
-                        put("itemName", item.dishName)
-                        put("price", item.price)
-                        put("quantity", item.quantity)
-                        put("selectedOptions", JSONArray(item.selectedOptions))
-                        put("specialInstructions", item.specialInstructions)
-                        put("imageURL", item.imageURL)
-                    })
+            var result: Pair<Int, String>? = null
+            for (attempt in 1..3) {
+                result = try {
+                    withContext(Dispatchers.IO) { postJson("/orders", order, token) }
+                } catch (e: java.io.IOException) {
+                    if (attempt == 3) throw e
+                    null
                 }
+                val status = result?.first ?: 0
+                if (status in 200..499) break
+                delay(1000L * attempt)
             }
+            val (status, body) = result ?: (0 to "")
+            println("📦 [Checkout] POST /orders → HTTP $status")
 
-            val restaurantName = CartManager.items.firstOrNull()?.restaurantName ?: "Unknown Restaurant"
-
-            val addr = selectedAddress
-            if (addr == null) {
-                errorMessage = "Please select a delivery address."
-                isPlacingOrder = false
-                return
-            }
-
-            val addressDict = JSONObject().apply {
-                put("street", addr.fullAddress)
-                put("cityStateZip", "")
-                put("isDefault", addr.id == "home")
-            }
-
-            val orderPayload = JSONObject().apply {
-                put("restaurantId", CartManager.restaurantId)
-                put("restaurantName", restaurantName)
-                put("items", itemsArray)
-                put("subtotal", CartManager.subtotal)
-                put("deliveryFee", CartManager.deliveryFee)
-                put("serviceFee", CartManager.serviceFee)
-                put("tax", CartManager.tax)
-                put("tip", tipAmount)
-                put("total", totalWithTip)
-                put("deliveryAddress", addressDict)
-                put("leaveAtDoor", leaveAtDoor)
-                put("paymentMethodId", selectedPayment.id)
-                put("paymentType", if (selectedPayment.id == "gpay") "google_pay" else "saved_card")
-                // The server checks the service area against this saved address
-                if (addr.id.isNotEmpty() && addr.id != "current_location") put("addressId", addr.id)
-            }
-
-            println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            println("📦 [Checkout] ORDER PAYLOAD:")
-            println("   Restaurant: $restaurantName (${CartManager.restaurantId})")
-            println("   Items: ${CartManager.items.size}")
-            println("   Total: $${String.format("%.2f", totalWithTip)}")
-            println("   Payment: ${selectedPayment.type}")
-            println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-            val result = withContext(Dispatchers.IO) {
-                val url = URL("${Config.API_BASE_URL}/orders")
-                val connection = url.openConnection() as HttpURLConnection
-                connection.requestMethod = "POST"
-                connection.setRequestProperty("Authorization", "Bearer $token")
-                connection.setRequestProperty("Content-Type", "application/json")
-                connection.doOutput = true
-
-                connection.outputStream.use { os ->
-                    os.write(orderPayload.toString().toByteArray(Charsets.UTF_8))
-                }
-
-                val responseCode = connection.responseCode
-                println("📦 [Checkout] POST /orders → HTTP $responseCode")
-
-                if (responseCode == 201 || responseCode == 200) {
-                    val responseBody = connection.inputStream.bufferedReader().readText()
-                    val json = JSONObject(responseBody)
-                    // udo3 returns {"id": "<uuid>", "orderNumber": "UDO-XXXXXX", ...}
-                    val orderId = json.optString("id", "").ifEmpty { json.optString("_id", "") }
-                    val orderNumber = json.optString("orderNumber", "")
-                    // Save to CartManager — matches iOS CartManager.shared.orderId / orderNumber
-                    CartManager.orderId = orderId
-                    CartManager.orderNumber = orderNumber
-                    println("✅ [Checkout] Order created! ID: $orderId, Number: $orderNumber")
-                    "success"
-                } else {
-                    val errorBody = connection.errorStream?.bufferedReader()?.readText() ?: "Unknown error"
-                    println("❌ [Checkout] Order creation failed (HTTP $responseCode): $errorBody")
-                    // Not served / service paused: no order was created, so never show success
-                    ServiceAreaException.parse(responseCode, errorBody)?.let { throw it }
-                    // udo3 errors are {"success": false, "message": "..."}; show it as-is
-                    val message = try { JSONObject(errorBody).optString("message", "") } catch (_: Exception) { "" }
-                    message.ifEmpty { "We couldn't place your order (HTTP $responseCode). You weren't charged." }
-                }
-            }
-
-            // Only a created order shows success and clears the cart (same as iOS).
-            if (result == "success") {
+            if (status == 201 || status == 200) {
+                val json = JSONObject(body)
+                // udo3 returns {"id": "<uuid>", "orderNumber": "UDO-XXXXXX", ...}
+                CartManager.orderId = json.optString("id", "").ifEmpty { json.optString("_id", "") }
+                CartManager.orderNumber = json.optString("orderNumber", "")
+                println("✅ [Checkout] Order created! ID: ${CartManager.orderId}")
+                pendingOrder = null
+                // Only a created order shows success and clears the cart.
                 showOrderSuccess = true
             } else {
-                errorMessage = result
+                println("❌ [Checkout] Order creation failed (HTTP $status): $body")
+                // Not served / service paused: no order was created, so never show success
+                ServiceAreaException.parse(status, body)?.let { throw it }
+                errorMessage = serverMessage(body)
+                    .ifEmpty { "We couldn't place your order (HTTP $status). Your card hold was released." }
             }
-
         } catch (e: ServiceAreaException) {
             println("📍 [Checkout] Order blocked: ${e.code}")
             // Prefer the full "not here yet" sheet; fall back to the server message
@@ -378,6 +340,110 @@ fun CheckoutScreen(
             errorMessage = "We couldn't reach the server, so your order wasn't placed. Please try again."
         } finally {
             isPlacingOrder = false
+        }
+    }
+
+    val paymentSheet = rememberPaymentSheet { result ->
+        val order = pendingOrder
+        when (result) {
+            is PaymentSheetResult.Completed -> {
+                val token = AuthManager.getToken(context)
+                if (order == null || token.isNullOrEmpty()) {
+                    isPlacingOrder = false
+                    errorMessage = "Your session expired, so the order wasn't placed. Please log in and try again."
+                } else {
+                    scope.launch { submitOrder(order, token) }
+                }
+            }
+            // Nothing was placed; the cart stays as it is.
+            is PaymentSheetResult.Canceled -> isPlacingOrder = false
+            is PaymentSheetResult.Failed -> {
+                isPlacingOrder = false
+                errorMessage = result.error.localizedMessage ?: "Your card couldn't be confirmed. Please try again."
+            }
+        }
+    }
+
+    suspend fun handlePlaceOrder() {
+        val token = AuthManager.getToken(context)
+        if (token.isNullOrEmpty()) {
+            errorMessage = "Not authenticated — please log in again."
+            return
+        }
+
+        val addr = selectedAddress
+        if (addr == null) {
+            errorMessage = "Please select a delivery address."
+            return
+        }
+
+        isPlacingOrder = true
+        errorMessage = ""
+
+        // Build the order payload — matches iOS Checkout.swift orderPayload
+        val itemsArray = JSONArray().apply {
+            CartManager.items.forEach { item ->
+                put(JSONObject().apply {
+                    put("itemId", item.menuItem?.id ?: java.util.UUID.randomUUID().toString())
+                    put("itemName", item.dishName)
+                    put("price", item.price)
+                    put("quantity", item.quantity)
+                    put("selectedOptions", JSONArray(item.selectedOptions))
+                    put("specialInstructions", item.specialInstructions)
+                    put("imageURL", item.imageURL)
+                })
+            }
+        }
+        val addressId = if (addr.id.isNotEmpty() && addr.id != "current_location") addr.id else ""
+        val orderPayload = JSONObject().apply {
+            put("restaurantId", CartManager.restaurantId)
+            put("restaurantName", CartManager.items.firstOrNull()?.restaurantName ?: "Unknown Restaurant")
+            put("items", itemsArray)
+            put("subtotal", CartManager.subtotal)
+            put("deliveryFee", CartManager.deliveryFee)
+            put("serviceFee", CartManager.serviceFee)
+            put("tax", CartManager.tax)
+            put("tip", tipAmount)
+            put("total", totalWithTip)
+            put("deliveryAddress", JSONObject().apply {
+                put("street", addr.fullAddress)
+                put("cityStateZip", "")
+                put("isDefault", addr.id == "home")
+            })
+            put("leaveAtDoor", leaveAtDoor)
+            // The server checks the service area against this saved address
+            if (addressId.isNotEmpty()) put("addressId", addressId)
+        }
+
+        try {
+            // Step 1: price on the server and hold the card.
+            val (status, body) = withContext(Dispatchers.IO) {
+                postJson("/payments/intents", orderPayload, token, mapOf("Idempotency-Key" to idempotencyKey(addressId)))
+            }
+            val json = try { JSONObject(body) } catch (_: Exception) { JSONObject() }
+            val intentId = json.optString("paymentIntentId", "")
+            val clientSecret = json.optString("clientSecret", "")
+            val publishableKey = json.optString("publishableKey", "")
+            if (status != 200 || intentId.isEmpty() || clientSecret.isEmpty() || publishableKey.isEmpty()) {
+                isPlacingOrder = false
+                errorMessage = serverMessage(body).ifEmpty { "Payments are unavailable right now. Please try again shortly." }
+                return
+            }
+
+            // Step 2: confirm the card in Stripe's sheet; the result callback places the order.
+            // The server's key, so the sheet always matches the account that made the hold.
+            PaymentConfiguration.init(context, publishableKey)
+            pendingOrder = JSONObject(orderPayload.toString()).put("paymentIntentId", intentId)
+            holdNotice = json.optString("message").ifEmpty { null }
+            val config = PaymentSheet.Configuration.Builder("U-DO")
+                .allowsDelayedPaymentMethods(false)
+                .apply { json.optString("holdAmount").takeIf { it.isNotEmpty() }?.let { primaryButtonLabel("Hold $$it") } }
+                .build()
+            paymentSheet.presentWithPaymentIntent(clientSecret, config)
+        } catch (e: Exception) {
+            println("❌ [Checkout] Couldn't start payment: ${e.message}")
+            isPlacingOrder = false
+            errorMessage = "We couldn't reach the server, so your order wasn't placed. Please try again."
         }
     }
 
@@ -568,31 +634,8 @@ fun CheckoutScreen(
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // Payment Method section
-                    PaymentMethodSection(
-                        paymentMethods = paymentMethods,
-                        selectedPayment = selectedPayment,
-                        onPaymentSelected = { selectedPayment = it },
-                        onAddPayment = { showWallet = true }
-                    )
-
-                    // Wallet bottom sheet (full height)
-                    if (showWallet) {
-                        val walletSheetState = androidx.compose.material3.rememberModalBottomSheetState(
-                            skipPartiallyExpanded = true
-                        )
-                        androidx.compose.material3.ModalBottomSheet(
-                            onDismissRequest = { showWallet = false },
-                            sheetState = walletSheetState,
-                            containerColor = Color.White
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Wallet(onBack = { showWallet = false })
-                            }
-                        }
-                    }
+                    // Payment: Stripe's sheet collects and confirms the card on "Place Order"
+                    PaymentMethodSection(holdNotice = holdNotice)
 
                     // Competitor details bottom sheet
                     if (showCompetitorDetails) {
@@ -892,15 +935,13 @@ private fun DeliveryAddressSection(
     }
 }
 
-// MARK: - Payment Method Section (matches iOS paymentSection)
+// MARK: - Payment Method Section
+//
+// No card picker here: PaymentSheet collects and confirms the card when the user places
+// the order, so what's shown is only how the hold works.
 
 @Composable
-private fun PaymentMethodSection(
-    paymentMethods: List<PaymentMethod>,
-    selectedPayment: PaymentMethod,
-    onPaymentSelected: (PaymentMethod) -> Unit,
-    onAddPayment: () -> Unit
-) {
+private fun PaymentMethodSection(holdNotice: String?) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -915,7 +956,6 @@ private fun PaymentMethodSection(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Show only the default/selected payment method
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -934,62 +974,18 @@ private fun PaymentMethodSection(
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = selectedPayment.type,
+                    text = "Card",
                     fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.Black
                 )
-                if (selectedPayment.last4 != null) {
-                    Text(
-                        text = "•••• ${selectedPayment.last4}",
-                        fontSize = 15.sp,
-                        color = Color.Gray
-                    )
-                }
+                Text(
+                    text = holdNotice
+                        ?: "You'll enter your card securely when you place the order. We hold a little over the total and only charge for what we deliver.",
+                    fontSize = 13.sp,
+                    color = Color.Gray
+                )
             }
-
-            Icon(
-                imageVector = Icons.Default.CheckCircle,
-                contentDescription = null,
-                tint = Color(0xFFCC5500),
-                modifier = Modifier.size(24.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // "Add another payment" → navigates to Wallet
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFF5F5F5), RoundedCornerShape(16.dp))
-                .clickable { onAddPayment() }
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.AddCircle,
-                contentDescription = null,
-                tint = Color(0xFFCC5500),
-                modifier = Modifier.size(22.dp)
-            )
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Text(
-                text = "Add another payment",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color(0xFFCC5500),
-                modifier = Modifier.weight(1f)
-            )
-
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = Color.Gray,
-                modifier = Modifier.size(18.dp)
-            )
         }
     }
 }
