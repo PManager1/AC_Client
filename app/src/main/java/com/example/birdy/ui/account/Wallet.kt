@@ -924,8 +924,14 @@ private suspend fun saveCardFromFields(
                 billingDetails = billingDetails
             )
 
-            // Create PaymentMethod via Stripe SDK
-            val stripe = Stripe(context, PaymentConfiguration.getInstance(context).publishableKey)
+            // Create PaymentMethod via Stripe SDK, on the server's Stripe account (or attaching it fails)
+            val publishableKey = fetchPublishableKey(context)
+            if (publishableKey == null) {
+                Log.e("Wallet", "❌ No publishable key from the server")
+                return@withContext null
+            }
+            PaymentConfiguration.init(context, publishableKey)
+            val stripe = Stripe(context, publishableKey)
 
             val paymentMethod: PaymentMethod? = kotlinx.coroutines.suspendCancellableCoroutine { cont ->
                 stripe.createPaymentMethod(
@@ -950,12 +956,31 @@ private suspend fun saveCardFromFields(
             val pmId = paymentMethod.id ?: ""
             Log.d("Wallet", "✅ Created PaymentMethod: $pmId")
 
-            // Send pm_ID to Go backend (matches iOS attachPaymentMethod)
+            // Send pm_ID to the backend (matches iOS attachPaymentMethod)
             attachPaymentMethod(context, pmId)
         } catch (e: Exception) {
             Log.e("Wallet", "❌ Error saving card: ${e.message}")
             null
         }
+    }
+}
+
+// MARK: - API: Server's Publishable Key (matches iOS useServerPublishableKey)
+private fun fetchPublishableKey(context: android.content.Context): String? {
+    return try {
+        val token = AuthManager.getToken(context)
+        if (token.isNullOrEmpty()) return null
+
+        val conn = (URL("${Config.API_BASE_URL}/payments/config").openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            setRequestProperty("Authorization", "Bearer $token")
+        }
+        if (conn.responseCode != 200) return null
+
+        JSONObject(conn.inputStream.bufferedReader().readText()).optString("publishableKey").takeIf { it.isNotEmpty() }
+    } catch (e: Exception) {
+        Log.e("Wallet", "❌ Error fetching publishable key: ${e.message}")
+        null
     }
 }
 
