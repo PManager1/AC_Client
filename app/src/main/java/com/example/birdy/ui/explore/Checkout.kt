@@ -84,7 +84,9 @@ import kotlinx.coroutines.withContext
 import androidx.compose.runtime.derivedStateOf
 import com.example.birdy.data.LocationManager
 import org.json.JSONArray
+import com.example.birdy.BuildConfig
 import com.stripe.android.PaymentConfiguration
+import com.stripe.android.core.exception.StripeException
 import com.stripe.android.paymentsheet.PaymentSheet
 import com.stripe.android.paymentsheet.PaymentSheetResult
 import com.stripe.android.paymentsheet.rememberPaymentSheet
@@ -384,7 +386,16 @@ fun CheckoutScreen(
             }
             is PaymentSheetResult.Failed -> {
                 isPlacingOrder = false
-                errorMessage = result.error.localizedMessage ?: "Your card couldn't be confirmed. Please try again."
+                val friendly = result.error.localizedMessage ?: "Your card couldn't be confirmed. Please try again."
+                // The request id (req_…) maps straight to Stripe Dashboard → Developers → Logs.
+                val detail = stripeErrorDetail(result.error)
+                if (BuildConfig.DEBUG) {
+                    println("❌ [Checkout] PaymentSheet failed for ${order?.optString("paymentIntentId") ?: "-"}: $detail")
+                    errorMessage = "$friendly\n\n[debug] $detail"
+                } else {
+                    stripeRequestId(result.error)?.let { println("[Checkout] PaymentSheet failed, Stripe request $it") }
+                    errorMessage = friendly
+                }
             }
         }
     }
@@ -1352,3 +1363,23 @@ private fun OrderSuccessOverlay() {
     }
 }
 
+// Stripe's message, code, HTTP status and request id from the error and its causes
+// (PaymentSheet may wrap the API error). Never includes the client secret.
+internal fun stripeErrorDetail(error: Throwable): String {
+    val parts = generateSequence(error) { it.cause }.take(5).mapNotNull { e ->
+        if (e is StripeException) {
+            listOfNotNull(
+                e.stripeError?.message ?: e.message,
+                e.stripeError?.code?.let { "code=$it" },
+                e.statusCode.takeIf { it != 0 }?.let { "http=$it" },
+                e.requestId?.let { "request=$it" }
+            ).joinToString(" ").ifEmpty { null }
+        } else {
+            e.message?.let { "${e.javaClass.simpleName}: $it" }
+        }
+    }.toList()
+    return parts.ifEmpty { listOf(error.javaClass.simpleName) }.joinToString(" | ")
+}
+
+internal fun stripeRequestId(error: Throwable): String? =
+    generateSequence(error) { it.cause }.take(5).firstNotNullOfOrNull { (it as? StripeException)?.requestId }
