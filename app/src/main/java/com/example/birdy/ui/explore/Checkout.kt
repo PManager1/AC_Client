@@ -254,6 +254,7 @@ fun CheckoutScreen(
         }
 
         isPlacingOrder = true
+        errorMessage = ""
 
         try {
             // Build the order payload — matches iOS Checkout.swift orderPayload exactly
@@ -343,17 +344,18 @@ fun CheckoutScreen(
                     println("❌ [Checkout] Order creation failed (HTTP $responseCode): $errorBody")
                     // Not served / service paused: no order was created, so never show success
                     ServiceAreaException.parse(responseCode, errorBody)?.let { throw it }
-                    "error: HTTP $responseCode"
+                    // udo3 errors are {"success": false, "message": "..."}; show it as-is
+                    val message = try { JSONObject(errorBody).optString("message", "") } catch (_: Exception) { "" }
+                    message.ifEmpty { "We couldn't place your order (HTTP $responseCode). You weren't charged." }
                 }
             }
 
-            if (result != "success") {
-                // Still proceed — don't block the user if order creation fails (matches iOS behavior)
-                println("⚠️ [Checkout] Order creation had issues but proceeding anyway")
+            // Only a created order shows success and clears the cart (same as iOS).
+            if (result == "success") {
+                showOrderSuccess = true
+            } else {
+                errorMessage = result
             }
-
-            // Show success animation
-            showOrderSuccess = true
 
         } catch (e: ServiceAreaException) {
             println("📍 [Checkout] Order blocked: ${e.code}")
@@ -372,8 +374,8 @@ fun CheckoutScreen(
             }
         } catch (e: Exception) {
             println("❌ [Checkout] Failed to create order: ${e.message}")
-            // Still proceed — don't block the user (matches iOS behavior)
-            showOrderSuccess = true
+            // No confirmed order: keep the cart so the user can try again.
+            errorMessage = "We couldn't reach the server, so your order wasn't placed. Please try again."
         } finally {
             isPlacingOrder = false
         }
