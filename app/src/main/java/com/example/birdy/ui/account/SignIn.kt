@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
@@ -35,10 +36,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,7 +69,8 @@ fun SignInScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var phoneNumber by remember { mutableStateOf("") }
+    var phoneNumber by remember { mutableStateOf("") } // digits only; dashes come from UsPhoneVisualTransformation
+    var phoneFieldFocused by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     var demoLoading by remember { mutableStateOf(false) }
@@ -128,9 +132,8 @@ fun SignInScreen(
             OutlinedTextField(
                 value = phoneNumber,
                 onValueChange = { input ->
-                    val formatted = formatPhoneNumber(input)
-                    phoneNumber = formatted.first
-                    errorMessage = formatted.second
+                    phoneNumber = nextUsPhoneDigits(phoneNumber, input)
+                    if (phoneNumber.length == 10) errorMessage = null
                 },
                 placeholder = {
                     Text(
@@ -141,7 +144,14 @@ fun SignInScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .focusRequester(focusRequester),
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { state ->
+                        // Only nag about length once the user leaves the field
+                        if (phoneFieldFocused && !state.isFocused && phoneNumber.length in 1..9) {
+                            errorMessage = "Phone number must be 10 digits"
+                        }
+                        phoneFieldFocused = state.isFocused
+                    },
                 shape = RoundedCornerShape(10.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = Color.White,
@@ -150,7 +160,9 @@ fun SignInScreen(
                     unfocusedBorderColor = OrangeSec2.copy(alpha = 0.5f)
                 ),
                 singleLine = true,
-                textStyle = TextStyle(fontSize = 16.sp)
+                textStyle = TextStyle(fontSize = 16.sp),
+                visualTransformation = UsPhoneVisualTransformation,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
         }
 
@@ -183,7 +195,7 @@ fun SignInScreen(
                         val result = handleSendOTP(phoneNumber)
                         loading = false
                         if (result.first) {
-                            onOtpSent(phoneNumber)
+                            onOtpSent(formatUsPhone(phoneNumber))
                         } else {
                             errorMessage = result.second
                         }
@@ -390,20 +402,6 @@ private suspend fun handleDemoLogin(context: android.content.Context): Pair<Bool
             Pair(false, "Connection error: ${e.localizedMessage}")
         }
     }
-}
-
-private fun formatPhoneNumber(input: String): Pair<String, String?> {
-    val digits = input.filter { it.isDigit() }
-    if (digits.length > 10) return Pair(input, "Phone number cannot exceed 10 digits")
-
-    var formatted = ""
-    for ((index, digit) in digits.withIndex()) {
-        if (index == 3 || index == 6) formatted += "-"
-        formatted += digit
-    }
-
-    val error = if (digits.length < 10 && digits.isNotEmpty()) "Phone number must be 10 digits" else null
-    return Pair(formatted, error)
 }
 
 private fun isValidPhoneNumber(phone: String): Boolean {

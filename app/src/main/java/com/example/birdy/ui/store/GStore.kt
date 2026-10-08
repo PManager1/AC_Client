@@ -1,9 +1,13 @@
 package com.example.birdy.ui.store
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
@@ -37,6 +41,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DirectionsBike
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBag
@@ -48,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,10 +66,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -77,6 +88,7 @@ import com.example.birdy.data.CartManager
 import com.example.birdy.data.Config
 import com.example.birdy.ui.components.shimmer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -198,6 +210,16 @@ private fun GroceryStoreContent(
     val expandedAisles = remember { mutableStateListOf<Int>() }
     val storeName = data.brand_info.name
 
+    // Which card's − qty + stepper is open; bumping stepperTaps restarts its 3s auto-collapse.
+    var expandedItemId by remember { mutableStateOf<String?>(null) }
+    var stepperTaps by remember { mutableIntStateOf(0) }
+    LaunchedEffect(expandedItemId, stepperTaps) {
+        if (expandedItemId != null) {
+            delay(3_000)
+            expandedItemId = null
+        }
+    }
+
     // Grocery items have no options, so + adds one straight to the cart.
     fun quickAdd(item: StoreMenuItem) {
         CartManager.restaurantId = storeId
@@ -219,6 +241,23 @@ private fun GroceryStoreContent(
         CartManager.items
             .filter { it.dishName == item.name && it.restaurantName == storeName }
             .sumOf { it.quantity }
+
+    fun keepExpanded(item: StoreMenuItem) {
+        expandedItemId = item.id
+        stepperTaps++
+    }
+
+    fun stepperAdd(item: StoreMenuItem) {
+        val wasInCart = quantityInCart(item) > 0
+        quickAdd(item)
+        if (wasInCart) keepExpanded(item)
+    }
+
+    fun stepperRemove(item: StoreMenuItem) {
+        CartManager.decrementItem(item.name)
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (quantityInCart(item) > 0) keepExpanded(item) else expandedItemId = null
+    }
 
     LazyColumn(
         state = listState,
@@ -262,7 +301,10 @@ private fun GroceryStoreContent(
                         if (index in expandedAisles) expandedAisles.remove(index) else expandedAisles.add(index)
                     },
                     quantityInCart = ::quantityInCart,
-                    onAdd = ::quickAdd,
+                    expandedItemId = expandedItemId,
+                    onAdd = ::stepperAdd,
+                    onRemove = ::stepperRemove,
+                    onExpand = ::keepExpanded,
                     onItemTap = onItemTap
                 )
             }
@@ -491,7 +533,10 @@ private fun AisleSection(
     isExpanded: Boolean,
     onToggle: () -> Unit,
     quantityInCart: (StoreMenuItem) -> Int,
+    expandedItemId: String?,
     onAdd: (StoreMenuItem) -> Unit,
+    onRemove: (StoreMenuItem) -> Unit,
+    onExpand: (StoreMenuItem) -> Unit,
     onItemTap: (StoreMenuItem) -> Unit
 ) {
     val count = aisle.items.size
@@ -560,7 +605,10 @@ private fun AisleSection(
                             GroceryProductCard(
                                 item = item,
                                 quantityInCart = quantityInCart(item),
+                                isExpanded = expandedItemId == item.id,
                                 onAdd = { onAdd(item) },
+                                onRemove = { onRemove(item) },
+                                onExpand = { onExpand(item) },
                                 onTap = { onItemTap(item) },
                                 modifier = Modifier.weight(1f)
                             )
@@ -578,7 +626,10 @@ private fun AisleSection(
                     GroceryProductCard(
                         item = item,
                         quantityInCart = quantityInCart(item),
+                        isExpanded = expandedItemId == item.id,
                         onAdd = { onAdd(item) },
+                        onRemove = { onRemove(item) },
+                        onExpand = { onExpand(item) },
                         onTap = { onItemTap(item) },
                         modifier = Modifier.width(136.dp)
                     )
@@ -594,7 +645,10 @@ private fun AisleSection(
 private fun GroceryProductCard(
     item: StoreMenuItem,
     quantityInCart: Int,
+    isExpanded: Boolean,
     onAdd: () -> Unit,
+    onRemove: () -> Unit,
+    onExpand: () -> Unit,
     onTap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -637,13 +691,16 @@ private fun GroceryProductCard(
             }
 
             if (isAvailable) {
-                AddButton(
+                QuantityControl(
                     quantityInCart = quantityInCart,
+                    isExpanded = isExpanded,
                     itemName = item.name,
                     onAdd = onAdd,
+                    onRemove = onRemove,
+                    onExpand = onExpand,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(6.dp)
+                        .padding(1.dp)
                 )
             }
         }
@@ -675,29 +732,114 @@ private fun GroceryProductCard(
     }
 }
 
+// White + when not in the cart, an orange count badge once it is, and tapping
+// the badge grows it into a − qty + stepper. Everything draws at 34dp but each
+// tap target is 44dp, so a near-miss on − doesn't drop the item by accident.
 @Composable
-private fun AddButton(quantityInCart: Int, itemName: String, onAdd: () -> Unit, modifier: Modifier = Modifier) {
-    val inCart = quantityInCart > 0
+private fun QuantityControl(
+    quantityInCart: Int,
+    isExpanded: Boolean,
+    itemName: String,
+    onAdd: () -> Unit,
+    onRemove: () -> Unit,
+    onExpand: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val state = when {
+        quantityInCart == 0 -> 0
+        isExpanded -> 2
+        else -> 1
+    }
+    AnimatedContent(
+        targetState = state,
+        transitionSpec = {
+            (fadeIn() + scaleIn(initialScale = 0.6f, transformOrigin = TransformOrigin(1f, 0.5f))) togetherWith
+                (fadeOut() + scaleOut(targetScale = 0.6f, transformOrigin = TransformOrigin(1f, 0.5f)))
+        },
+        contentAlignment = Alignment.BottomEnd,
+        modifier = modifier,
+        label = "quantityControl"
+    ) { target ->
+        when (target) {
+            0 -> Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clickable(onClick = onAdd)
+                    .semantics { contentDescription = "Add $itemName to cart" },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .shadow(3.dp, CircleShape)
+                        .background(Color.White, CircleShape)
+                        .border(BorderStroke(1.dp, SystemGray5), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, tint = Color.Black, modifier = Modifier.size(20.dp))
+                }
+            }
+
+            1 -> Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clickable(onClick = onExpand)
+                    .semantics {
+                        contentDescription = "$itemName, $quantityInCart in cart. Double-tap to change quantity"
+                        customActions = listOf(
+                            CustomAccessibilityAction("Add one") { onAdd(); true },
+                            CustomAccessibilityAction("Remove one") { onRemove(); true }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .shadow(3.dp, CircleShape)
+                        .background(BurntOrange, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(text = "$quantityInCart", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
+
+            else -> Box(contentAlignment = Alignment.Center) {
+                // The orange capsule sits behind 44dp buttons, inset so it looks badge-sized.
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .padding(5.dp)
+                        .shadow(3.dp, CircleShape)
+                        .background(BurntOrange, CircleShape)
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StepperButton(Icons.Filled.Remove, "Remove one $itemName", onRemove)
+                    Text(
+                        text = "$quantityInCart",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.width(18.dp)
+                    )
+                    StepperButton(Icons.Filled.Add, "Add one $itemName", onAdd)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StepperButton(icon: ImageVector, description: String, onClick: () -> Unit) {
     Box(
-        modifier = modifier
-            .size(34.dp)
-            .shadow(3.dp, CircleShape)
-            .background(if (inCart) BurntOrange else Color.White, CircleShape)
-            .then(if (inCart) Modifier else Modifier.border(BorderStroke(1.dp, SystemGray5), CircleShape))
+        modifier = Modifier
+            .size(44.dp)
             .clip(CircleShape)
-            .clickable(onClick = onAdd),
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        if (inCart) {
-            Text(text = "$quantityInCart", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        } else {
-            Icon(
-                imageVector = Icons.Filled.Add,
-                contentDescription = "Add $itemName to cart",
-                tint = Color.Black,
-                modifier = Modifier.size(20.dp)
-            )
-        }
+        Icon(icon, contentDescription = description, tint = Color.White, modifier = Modifier.size(18.dp))
     }
 }
 

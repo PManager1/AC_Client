@@ -109,6 +109,27 @@ object SearchApi {
         }
     }
 
+    /**
+     * The brand's type, looked up from GET /brands/{id} when the caller doesn't have it
+     * (recently visited entries saved by an older server). "" if the lookup fails.
+     */
+    fun resolveBrandType(brandId: String, brandType: String): String {
+        if (brandType.isNotEmpty()) return brandType
+        return try {
+            val conn = open("/brands/$brandId", "GET")
+            val code = codeOf(conn)
+            val body = bodyOf(conn)
+            conn.disconnect()
+            if (code == 200) JSONObject(body).str("brandType") else {
+                println("⚠️ [SearchApi] brand type lookup returned status $code for $brandId")
+                ""
+            }
+        } catch (e: Exception) {
+            println("❌ [SearchApi] brand type lookup error for $brandId: ${e.message}")
+            ""
+        }
+    }
+
     /** Clears the user's recent searches (not visited stores). */
     fun clearSearches(): Boolean = try {
         val conn = open("/search/history", "DELETE", mapOf("type" to "searches"))

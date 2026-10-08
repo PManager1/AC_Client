@@ -77,6 +77,7 @@ fun SearchFoodScreen(
     var isSearching by remember { mutableStateOf(false) }
     val recentSearches = remember { mutableStateListOf<RecentSearchEntry>() }
     var visitedBrands by remember { mutableStateOf<List<VisitedBrand>>(emptyList()) }
+    var isOpeningBrand by remember { mutableStateOf(false) }
 
     // Loads recent searches and recently visited stores once. The server is the
     // source of truth, so "Clear All" in See More sticks.
@@ -199,8 +200,17 @@ fun SearchFoodScreen(
                 visitedBrands = visitedBrands,
                 onSearchClick = { searchText = it },
                 onVisitedClick = { visited ->
-                    saveHistory(null, BrandSuggestion(visited.brandId, visited.brandName, visited.logoUrl, visited.tags, visited.brandType))
-                    onBrandClick(visited.brandId, visited.brandType)
+                    if (!isOpeningBrand) {
+                        isOpeningBrand = true
+                        scope.launch {
+                            val brandType = withContext(Dispatchers.IO) {
+                                SearchApi.resolveBrandType(visited.brandId, visited.brandType)
+                            }
+                            isOpeningBrand = false
+                            saveHistory(null, BrandSuggestion(visited.brandId, visited.brandName, visited.logoUrl, visited.tags, brandType))
+                            onBrandClick(visited.brandId, brandType)
+                        }
+                    }
                 },
                 onSeeMore = onSeeMore
             )

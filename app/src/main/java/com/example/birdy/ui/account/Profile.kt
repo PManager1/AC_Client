@@ -848,20 +848,13 @@ private fun PhoneChangeSheet(
     val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // Digits only; dashes come from UsPhoneVisualTransformation.
+    // Any future prefill must go through nextUsPhoneDigits("", saved).
     var newPhone by remember { mutableStateOf("") }
     var isSubmitting by remember { mutableStateOf(false) }
     var showError by remember { mutableStateOf(false) }
     var showSuccess by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf("") }
-
-    fun formatPhone(input: String): String {
-        val digits = input.filter { it.isDigit() }.take(10)
-        return when {
-            digits.length >= 7 -> "${digits.substring(0, 3)}-${digits.substring(3, 6)}-${digits.substring(6)}"
-            digits.length >= 4 -> "${digits.substring(0, 3)}-${digits.substring(3)}"
-            else -> digits
-        }
-    }
 
     val isValid = newPhone.filter { it.isDigit() }.length == 10
 
@@ -896,7 +889,7 @@ private fun PhoneChangeSheet(
 
                     val payload = JSONObject().apply {
                         put("currentPhone", currentPhone)
-                        put("newPhone", newPhone)
+                        put("newPhone", formatUsPhone(newPhone))
                     }
                     conn.outputStream.use { os ->
                         os.write(payload.toString().toByteArray(Charsets.UTF_8))
@@ -991,10 +984,8 @@ private fun PhoneChangeSheet(
             )
             OutlinedTextField(
                 value = newPhone,
-                onValueChange = { raw ->
-                    val formatted = formatPhone(raw)
-                    if (formatted != newPhone) newPhone = formatted
-                },
+                onValueChange = { raw -> newPhone = nextUsPhoneDigits(newPhone, raw) },
+                visualTransformation = UsPhoneVisualTransformation,
                 placeholder = {
                     Text("(123) 456-7890", color = Color.Gray.copy(alpha = 0.5f), fontSize = 17.sp)
                 },
@@ -1003,7 +994,7 @@ private fun PhoneChangeSheet(
                     .shadow(2.dp, RoundedCornerShape(8.dp)),
                 singleLine = true,
                 shape = RoundedCornerShape(8.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone),
+                keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = Color.White,
                     unfocusedContainerColor = Color.White,
