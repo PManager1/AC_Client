@@ -95,6 +95,8 @@ class MainActivity : ComponentActivity() {
         AuthManager.init(applicationContext)
         // Order chat (BirdyKitAndroid) uses our udo3 session.
         OrderChat.configure(Config.API_BASE_URL, { AuthManager.getToken() }, { AuthManager.getUserID() })
+        // Live saved-cart changes from the web or another device (keeps the socket open while signed in).
+        com.example.birdy.data.CartManager.startLiveUpdates()
         // Initialize Stripe SDK — matches iOS AppDelegate stripeInit()
         PaymentConfiguration.init(applicationContext, Config.STRIPE_PUBLISHABLE_KEY)
         enableEdgeToEdge()
@@ -133,6 +135,8 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Clear badge whenever app comes to foreground
         clearNotifications()
+        // The saved cart may have changed on the web or another device.
+        com.example.birdy.data.CartManager.foreground()
     }
 
     private fun clearNotifications() {

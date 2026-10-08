@@ -138,6 +138,8 @@ fun StoreScreen(
     // Load data: three-phase — quick brand → full menu (no GPS) → location (GPS background)
     val context = LocalContext.current
     LaunchedEffect(restaurantId) {
+        // Restaurants keep their cart on the phone (not the grocery saved cart).
+        CartManager.openStore(restaurantId, savedCart = false)
         isLoading = true
         loadError = false
         try {

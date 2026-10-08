@@ -99,6 +99,8 @@ import java.util.Locale
 // Mirrors IC GStore.swift — loads /brands/{id} + /brands/{id}/aisles and displays aisle items.
 
 data class GroceryAisleItem(
+    /** udo3 catalog product id (the saved cart's key); empty if the aisle data had none. */
+    val id: String,
     val name: String,
     val price: Double,
     val description: String,
@@ -146,7 +148,11 @@ fun GStoreScreen(
         isLoading = false
     }
 
-    LaunchedEffect(restaurantId) { load() }
+    LaunchedEffect(restaurantId) {
+        // Grocery stores keep their cart on the server (the same one the web shows).
+        CartManager.openStore(restaurantId, savedCart = true)
+        load()
+    }
 
     Box(
         modifier = Modifier
@@ -231,16 +237,14 @@ private fun GroceryStoreContent(
                 price = item.price,
                 quantity = 1,
                 imageURL = item.image_url,
-                menuItem = item
+                menuItem = item,
+                productId = item.id
             )
         )
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
     }
 
-    fun quantityInCart(item: StoreMenuItem): Int =
-        CartManager.items
-            .filter { it.dishName == item.name && it.restaurantName == storeName }
-            .sumOf { it.quantity }
+    fun quantityInCart(item: StoreMenuItem): Int = CartManager.quantity(item, storeName)
 
     fun keepExpanded(item: StoreMenuItem) {
         expandedItemId = item.id
@@ -254,7 +258,12 @@ private fun GroceryStoreContent(
     }
 
     fun stepperRemove(item: StoreMenuItem) {
-        CartManager.decrementItem(item.name)
+        val line = CartManager.items.firstOrNull { it.productId == item.id }
+        if (CartManager.isSavedCart && line != null) {
+            CartManager.updateQuantity(line, line.quantity - 1)
+        } else {
+            CartManager.decrementItem(item.name)
+        }
         haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         if (quantityInCart(item) > 0) keepExpanded(item) else expandedItemId = null
     }
@@ -1086,13 +1095,15 @@ private suspend fun fetchGroceryStore(restaurantId: String): StoreData? {
                 StoreMenuCategory(
                     category_name = aisle.category,
                     items = aisle.items.map { item ->
+                        // The catalog id keys the saved cart. Without one the item can't be
+                        // ordered (it would never reach the server cart): shown unavailable.
                         StoreMenuItem(
-                            id = java.util.UUID.randomUUID().toString(),
+                            id = item.id.ifEmpty { "missing-" + java.util.UUID.randomUUID().toString() },
                             name = item.name,
                             description = item.description,
                             price = item.price,
                             image_url = item.rawImageUrl,
-                            is_available = item.available,
+                            is_available = item.available && item.id.isNotEmpty(),
                             modifier_groups = emptyList()
                         )
                     }
@@ -1165,6 +1176,7 @@ private fun parseAisles(root: JSONObject?): List<GroceryAisle> {
             } else emptyList()
             items.add(
                 GroceryAisleItem(
+                    id = if (itemObj.isNull("id")) "" else itemObj.optString("id", ""),
                     name = itemObj.optString("name", "Item"),
                     price = itemObj.optDouble("price", 0.0),
                     description = itemObj.optString("description", ""),

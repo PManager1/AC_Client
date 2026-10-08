@@ -22,6 +22,7 @@
 - Deploy: git push gigalixir main
 
 # Rules
+**Never run git commits. Do not commit code changes under any circumstances; stage or leave modified files uncommitted so I can review and commit them myself.**
 - Prefer adding to existing modules/folders over creating new files.
 - Keep unrelated changes out of a commit. One feature per commit.
 - Never commit generated files in priv/static (hashed names, .gz, cache_manifest.json).

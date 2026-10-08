@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -63,6 +64,24 @@ fun CartScreen(
     onBack: () -> Unit,
     onCheckout: () -> Unit = {}
 ) {
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        // Opened without a store: show the newest saved cart.
+        CartManager.showSavedCartIfNothingOpen()
+        // The saved cart may have changed on the web or another device.
+        CartManager.refresh()
+    }
+
+    CartManager.cartMessage?.let { message ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { CartManager.cartMessage = null },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { CartManager.cartMessage = null }) { Text("OK") }
+            },
+            title = { Text("Cart") },
+            text = { Text(message) }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -106,11 +125,48 @@ fun CartScreen(
             )
         )
 
+        OtherCartsSection()
+
         if (CartManager.items.isEmpty()) {
             EmptyCartView(onDismiss = onBack)
         } else {
             CartListView(onCheckout = onCheckout)
         }
+    }
+}
+
+/** Other carts on the account (other grocery stores, the phone's restaurant cart). */
+@Composable
+private fun OtherCartsSection() {
+    val others = CartManager.otherSavedCarts
+    if (others.isEmpty() && !CartManager.hasHiddenPhoneCart) return
+
+    Column(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(text = "Also in your carts", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+        others.forEach { other ->
+            OtherCartRow(other.brandName, other.itemCount) { CartManager.openStore(other.brandId, savedCart = true) }
+        }
+        if (CartManager.hasHiddenPhoneCart) {
+            OtherCartRow(CartManager.phoneCartName, CartManager.phoneCartCount) { CartManager.showPhoneCart() }
+        }
+    }
+}
+
+@Composable
+private fun OtherCartRow(name: String, count: Int, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFF2F2F7), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = name, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black, modifier = Modifier.weight(1f))
+        Text(text = "$count item${if (count == 1) "" else "s"}", fontSize = 14.sp, color = Color.Gray)
     }
 }
 
@@ -277,7 +333,7 @@ private fun CartListView(onCheckout: () -> Unit = {}) {
 
                 PriceRow(title = "Subtotal", amount = CartManager.subtotal)
                 Spacer(modifier = Modifier.height(8.dp))
-                PriceRow(title = "Delivery Fee", amount = CartManager.deliveryFee)
+                PriceRow(title = "Delivery Fee (estimate)", amount = CartManager.deliveryFee)
                 Spacer(modifier = Modifier.height(8.dp))
                 PriceRow(title = "Service Fee", amount = CartManager.serviceFee)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -293,7 +349,25 @@ private fun CartListView(onCheckout: () -> Unit = {}) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Proceed to Checkout button
+            if (CartManager.hasUnavailableItems) {
+                Text(
+                    text = "Remove unavailable items",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Red,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .background(Color.Red.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
+                        .clickable { CartManager.removeUnavailableItems() }
+                        .padding(vertical = 10.dp),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            // Proceed to Checkout button (waits until unavailable items are removed)
+            val canCheckout = !CartManager.hasUnavailableItems
             Text(
                 text = "Proceed to Checkout • $${String.format("%.2f", CartManager.total)}",
                 fontSize = 18.sp,
@@ -303,10 +377,10 @@ private fun CartListView(onCheckout: () -> Unit = {}) {
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
                     .background(
-                        Color(0xFFCC5500),
+                        Color(0xFFCC5500).copy(alpha = if (canCheckout) 1f else 0.4f),
                         RoundedCornerShape(10.dp)
                     )
-                    .clickable { onCheckout() }
+                    .clickable(enabled = canCheckout) { onCheckout() }
                     .padding(vertical = 10.dp),
                 textAlign = TextAlign.Center
             )
@@ -346,6 +420,7 @@ fun CartItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
+            .alpha(if (item.isAvailable) 1f else 0.5f)
             .background(Color.White, RoundedCornerShape(16.dp))
             .border(1.dp, Color.Gray.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
             .clickable { onItemClick(item) },
@@ -406,6 +481,15 @@ fun CartItemRow(
                         fontSize = 12.sp,
                         color = Color(0xFFFF9800), // Orange
                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    )
+                }
+
+                if (!item.isAvailable) {
+                    Text(
+                        text = "No longer available",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Red
                     )
                 }
             }

@@ -139,7 +139,12 @@ fun CheckoutScreen(
     var isLoadingCompetitorEstimate by remember { mutableStateOf(true) }
     var showCompetitorDetails by remember { mutableStateOf(false) }
 
-    val totalWithTip = CartManager.total + tipAmount
+    // The server's total for this order (card hold response); shown once known.
+    var serverTotal by remember { mutableStateOf<Double?>(null) }
+    // A changed tip or mode is priced again on the next hold.
+    LaunchedEffect(tipAmount, selectedMode) { serverTotal = null }
+
+    val totalWithTip = serverTotal ?: (CartManager.total + tipAmount)
 
     val displayCompetitorEstimate = competitorEstimate ?: 0.0
 
@@ -284,6 +289,21 @@ fun CheckoutScreen(
     fun serverMessage(body: String): String =
         try { JSONObject(body).optString("message", "") } catch (_: Exception) { "" }
 
+    // 409 cart_changed / items_unavailable, 404 cart_not_found: the saved cart moved on
+    // (another device, a price edit, an item the store stopped selling). Back to the
+    // cart, refreshed, with the server's message.
+    fun cartChanged(status: Int, body: String): Boolean {
+        val code = try { JSONObject(body).optString("error", "") } catch (_: Exception) { "" }
+        if ((status != 409 && status != 404) || code !in setOf("cart_changed", "items_unavailable", "cart_not_found")) return false
+        serverTotal = null
+        pendingOrder = null
+        isPlacingOrder = false
+        CartManager.refresh()
+        CartManager.cartMessage = serverMessage(body).ifEmpty { "Your cart changed. Please review it and check out again." }
+        onBack()
+        return true
+    }
+
     // Step 3: the card is held; place the order. A retry with the same intent returns the
     // same order, never a second one.
     suspend fun submitOrder(order: JSONObject, token: String) {
@@ -312,6 +332,8 @@ fun CheckoutScreen(
                 pendingOrder = null
                 // Only a created order shows success and clears the cart.
                 showOrderSuccess = true
+            } else if (cartChanged(status, body)) {
+                println("🛒 [Checkout] Cart changed before the order (HTTP $status)")
             } else {
                 println("❌ [Checkout] Order creation failed (HTTP $status): $body")
                 // Not served / service paused: no order was created, so never show success
@@ -356,7 +378,10 @@ fun CheckoutScreen(
                 }
             }
             // Nothing was placed; the cart stays as it is.
-            is PaymentSheetResult.Canceled -> isPlacingOrder = false
+            is PaymentSheetResult.Canceled -> {
+                isPlacingOrder = false
+                serverTotal = null
+            }
             is PaymentSheetResult.Failed -> {
                 isPlacingOrder = false
                 errorMessage = result.error.localizedMessage ?: "Your card couldn't be confirmed. Please try again."
@@ -413,6 +438,15 @@ fun CheckoutScreen(
             put("leaveAtDoor", leaveAtDoor)
             // The server checks the service area against this saved address
             if (addressId.isNotEmpty()) put("addressId", addressId)
+            // The server prices fees itself and its total is what's shown and charged.
+            put("serverPricing", true)
+            put("deliveryMode", if (selectedMode == "Pickup") "pickup" else "delivery")
+            // A grocery store's saved cart: the server prices exactly these lines from it.
+            val cartId = CartManager.serverCartId
+            if (CartManager.isSavedCart && cartId != null) {
+                put("cartId", cartId)
+                put("cartItemIds", JSONArray(CartManager.items.mapNotNull { it.serverLineId }))
+            }
         }
 
         try {
@@ -424,6 +458,7 @@ fun CheckoutScreen(
             val intentId = json.optString("paymentIntentId", "")
             val clientSecret = json.optString("clientSecret", "")
             val publishableKey = json.optString("publishableKey", "")
+            if (cartChanged(status, body)) return
             if (status != 200 || intentId.isEmpty() || clientSecret.isEmpty() || publishableKey.isEmpty()) {
                 isPlacingOrder = false
                 errorMessage = serverMessage(body).ifEmpty { "Payments are unavailable right now. Please try again shortly." }
@@ -434,6 +469,7 @@ fun CheckoutScreen(
             // The server's key, so the sheet always matches the account that made the hold.
             PaymentConfiguration.init(context, publishableKey)
             pendingOrder = JSONObject(orderPayload.toString()).put("paymentIntentId", intentId)
+            json.optString("total").toDoubleOrNull()?.let { serverTotal = it }
             holdNotice = json.optString("message").ifEmpty { null }
             val config = PaymentSheet.Configuration.Builder("U-DO")
                 .allowsDelayedPaymentMethods(false)
@@ -453,8 +489,9 @@ fun CheckoutScreen(
             delay(1000)
             // 1. Trigger driver tracking (MainActivity observes CartManager.showDriverTracking)
             CartManager.showDriverTracking = true
-            // 2. Clear the cart (but NOT showDriverTracking!)
-            CartManager.clear()
+            // 2. A saved cart already lost the ordered lines on the server: re-read it.
+            //    The phone's cart is emptied (but NOT showDriverTracking!)
+            CartManager.afterOrderPlaced()
             // 3. Navigate back from Checkout
             onTrackOrder()
         }
@@ -1137,7 +1174,7 @@ private fun SummarySection(
 
         CheckoutPriceRow(title = "Subtotal", amount = CartManager.subtotal)
         Spacer(modifier = Modifier.height(8.dp))
-        CheckoutPriceRow(title = "Delivery Fee", amount = CartManager.deliveryFee)
+        CheckoutPriceRow(title = "Delivery Fee (estimate)", amount = CartManager.deliveryFee)
         Spacer(modifier = Modifier.height(8.dp))
         CheckoutPriceRow(title = "Service Fee", amount = CartManager.serviceFee)
         Spacer(modifier = Modifier.height(8.dp))

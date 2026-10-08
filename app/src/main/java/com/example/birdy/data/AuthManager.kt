@@ -38,6 +38,8 @@ object AuthManager {
         if (!::prefs.isInitialized) return
         if (token != null) {
             prefs.edit().putString(KEY_AUTH_TOKEN, token).apply()
+            // Grocery lines added while signed out join the saved cart.
+            CartManager.signedIn()
         } else {
             clearToken()
         }
@@ -93,6 +95,8 @@ object AuthManager {
     fun setUserID(id: String) {
         if (!::prefs.isInitialized) return
         prefs.edit().putString(KEY_USER_ID, id).apply()
+        // Sign-in sets the token first, then the id: now the cart topic can be joined.
+        if (id.isNotEmpty()) CartManager.startLiveUpdates()
     }
 
     fun getUserID(): String {
@@ -130,6 +134,8 @@ object AuthManager {
     fun clearAll() {
         // Stop the live order chat stream for this (now signed-out) user.
         OrderChatSocket.disconnect()
+        // The saved cart belongs to the account; the phone's cart stays.
+        CartManager.signedOut()
         if (!::prefs.isInitialized) return
         prefs.edit().clear().apply()
     }
