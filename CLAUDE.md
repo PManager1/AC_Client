@@ -30,6 +30,9 @@
 - Phone numbers go to external services in E.164 (+1...).
 - Add tests for new behavior.
 
+## Database
+- There is ONE database: Supabase (Postgres), already connected. Never create, install, or start a local Postgres or any other database, and never add a second Repo or DB config. Use the existing connection in config/ and the DATABASE_URL env var. If a task seems to need a different database, stop and ask first.
+
 # Known gotchas
 - Supabase SMS hook now points to udo3 /api/v1/auth/sms-hook (BK hook is the rollback).
 - Env vars live on gigalixir, not in git.
