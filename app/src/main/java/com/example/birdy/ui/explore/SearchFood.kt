@@ -68,7 +68,7 @@ private val suggestedSearches = listOf("Pizza", "Sushi", "Burgers", "Chicken", "
 @Composable
 fun SearchFoodScreen(
     onBack: () -> Unit = {},
-    onBrandClick: (String) -> Unit = {},
+    onBrandClick: (brandId: String, brandType: String) -> Unit = { _, _ -> },
     onSeeMore: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
@@ -123,7 +123,7 @@ fun SearchFoodScreen(
             while (recentSearches.size > 10) recentSearches.removeAt(recentSearches.size - 1)
         }
         if (brand != null) {
-            val entry = VisitedBrand(brand.id, brand.name, brand.logoUrl, brand.tags)
+            val entry = VisitedBrand(brand.id, brand.name, brand.logoUrl, brand.tags, brandType = brand.brandType)
             visitedBrands = (listOf(entry) + visitedBrands.filter { it.brandId != brand.id }).take(20)
         }
         if (cleaned == null && brand == null) return
@@ -199,8 +199,8 @@ fun SearchFoodScreen(
                 visitedBrands = visitedBrands,
                 onSearchClick = { searchText = it },
                 onVisitedClick = { visited ->
-                    saveHistory(null, BrandSuggestion(visited.brandId, visited.brandName, visited.logoUrl, visited.tags))
-                    onBrandClick(visited.brandId)
+                    saveHistory(null, BrandSuggestion(visited.brandId, visited.brandName, visited.logoUrl, visited.tags, visited.brandType))
+                    onBrandClick(visited.brandId, visited.brandType)
                 },
                 onSeeMore = onSeeMore
             )
@@ -211,7 +211,7 @@ fun SearchFoodScreen(
                 isSearching = isSearching,
                 onBrandClick = { brand ->
                     saveHistory(searchText, brand)
-                    onBrandClick(brand.id)
+                    onBrandClick(brand.id, brand.brandType)
                 }
             )
         }

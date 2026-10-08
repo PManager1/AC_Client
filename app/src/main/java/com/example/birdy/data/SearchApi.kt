@@ -17,7 +17,8 @@ data class BrandSuggestion(
     val id: String,
     val name: String,
     val logoUrl: String,
-    val tags: List<String>
+    val tags: List<String>,
+    val brandType: String = ""
 )
 
 data class RecentSearchEntry(
@@ -30,7 +31,8 @@ data class VisitedBrand(
     val brandName: String,
     val logoUrl: String,
     val tags: List<String>,
-    val visitedAt: String? = null
+    val visitedAt: String? = null,
+    val brandType: String = ""
 )
 
 enum class SearchStatus { SUCCESS, AUTH_ERROR, NETWORK_ERROR }
@@ -119,6 +121,11 @@ object SearchApi {
         false
     }
 
+    /** Brand types that open the grocery store screen (aisles), same as the Home grocery grid. */
+    private val groceryBrandTypes = setOf("grocery")
+
+    fun isGroceryType(brandType: String): Boolean = brandType.lowercase() in groceryBrandTypes
+
     // MARK: - Parsing (pure, unit-tested). Missing or null fields fall back to defaults,
     // and a malformed item is skipped instead of failing the whole list.
 
@@ -135,7 +142,8 @@ object SearchApi {
                 brandName = item.str("brandName"),
                 logoUrl = item.str("logoUrl"),
                 tags = item.optJSONArray("tags").strings(),
-                visitedAt = item.str("visitedAt").ifEmpty { null }
+                visitedAt = item.str("visitedAt").ifEmpty { null },
+                brandType = item.str("brandType")
             )
         }
         return SearchHistoryResult(SearchStatus.SUCCESS, searches, visited)
@@ -149,7 +157,8 @@ object SearchApi {
                 id = id,
                 name = item.str("name"),
                 logoUrl = item.str("logoUrl"),
-                tags = item.optJSONArray("tags").strings()
+                tags = item.optJSONArray("tags").strings(),
+                brandType = item.str("brandType")
             )
         }
         return BrandSearchResult(obj.str("query"), brands)

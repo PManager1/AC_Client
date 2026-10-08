@@ -33,6 +33,7 @@ import com.example.birdy.data.AuthManager
 import com.example.birdy.data.CartManager
 import com.example.birdy.data.Config
 import com.example.birdy.data.LocationManager
+import com.example.birdy.data.SearchApi
 import com.stripe.android.PaymentConfiguration
 import com.example.birdy.data.ForceUpdateChecker
 import com.example.birdy.ui.account.AccountScreen
@@ -211,6 +212,20 @@ fun BirdyAppContent() {
     var showSeaMore by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
+    // Search result tap (Home and Explore): grocery brands open GStore like the Home grocery grid.
+    fun openSearchedBrand(brandId: String, brandType: String) {
+        selectedRestaurantId = brandId
+        selectedStoreName = ""
+        showSearchFood = false
+        if (SearchApi.isGroceryType(brandType)) {
+            selectedIsGrocery = true
+            showGStore = true
+        } else {
+            selectedIsGrocery = false
+            showStore = true
+        }
+    }
+
     // Force update check
     var showForceUpdate by remember { mutableStateOf(false) }
     var forceUpdateMinVersion by remember { mutableStateOf("0.0.0") }
@@ -273,13 +288,7 @@ fun BirdyAppContent() {
                             showSearchFood -> {
                                 SearchFoodScreen(
                                     onBack = { showSearchFood = false },
-                                    onBrandClick = { brandId ->
-                                        selectedRestaurantId = brandId
-                                        selectedStoreName = ""
-                                        selectedIsGrocery = false
-                                        showSearchFood = false
-                                        showStore = true
-                                    },
+                                    onBrandClick = ::openSearchedBrand,
                                     onSeeMore = { showSeaMore = true }
                                 )
                             }
@@ -495,13 +504,7 @@ fun BirdyAppContent() {
                             showSearchFood -> {
                                 SearchFoodScreen(
                                     onBack = { showSearchFood = false },
-                                    onBrandClick = { brandId ->
-                                        selectedRestaurantId = brandId
-                                        selectedStoreName = ""
-                                        selectedIsGrocery = false
-                                        showSearchFood = false
-                                        showStore = true
-                                    },
+                                    onBrandClick = ::openSearchedBrand,
                                     onSeeMore = { showSeaMore = true }
                                 )
                             }

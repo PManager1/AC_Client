@@ -3,7 +3,9 @@ package com.example.birdy
 import com.example.birdy.data.SearchApi
 import com.example.birdy.data.SearchStatus
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SearchApiTest {
@@ -25,8 +27,8 @@ class SearchApiTest {
     fun parseBrandsToleratesNullAndMissingFields() {
         val json = """
             {"query": "pizza", "brands": [
-              {"id": "1", "name": "Pizza Hut", "logoUrl": null, "tags": null},
-              {"id": "2", "name": null},
+              {"id": "1", "name": "Pizza Hut", "logoUrl": null, "tags": null, "brandType": "restaurant"},
+              {"id": "2", "name": null, "brandType": null},
               {"name": "no id, skipped"},
               "not an object"
             ]}
@@ -39,6 +41,8 @@ class SearchApiTest {
         assertEquals("", result.brands[0].logoUrl)
         assertEquals(emptyList<String>(), result.brands[0].tags)
         assertEquals("", result.brands[1].name)
+        assertEquals("restaurant", result.brands[0].brandType)
+        assertEquals("", result.brands[1].brandType)
     }
 
     @Test
@@ -47,7 +51,7 @@ class SearchApiTest {
             {"query": "",
              "recentSearches": [{"query": "Pizza", "count": 3}, {"query": null}, {"count": 2}],
              "recentlyVisitedBrands": [
-               {"brandId": "b1", "brandName": "Taco Spot", "logoUrl": null, "tags": ["mexican"], "visitedAt": "2026-10-02T14:03:11Z"},
+               {"brandId": "b1", "brandName": "Taco Spot", "logoUrl": null, "tags": ["mexican"], "visitedAt": "2026-10-02T14:03:11Z", "brandType": "grocery"},
                {"brandId": "b2", "visitedAt": null}
              ]}
         """.trimIndent()
@@ -63,6 +67,16 @@ class SearchApiTest {
         assertEquals("2026-10-02T14:03:11Z", result.visitedBrands[0].visitedAt)
         assertEquals("", result.visitedBrands[1].brandName)
         assertNull(result.visitedBrands[1].visitedAt)
+        assertEquals("grocery", result.visitedBrands[0].brandType)
+        assertEquals("", result.visitedBrands[1].brandType)
+    }
+
+    @Test
+    fun isGroceryTypeMatchesGroceryOnlyIgnoringCase() {
+        assertTrue(SearchApi.isGroceryType("grocery"))
+        assertTrue(SearchApi.isGroceryType("Grocery"))
+        assertFalse(SearchApi.isGroceryType("restaurant"))
+        assertFalse(SearchApi.isGroceryType(""))
     }
 
     @Test
