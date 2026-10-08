@@ -72,10 +72,7 @@ import com.mapbox.maps.plugin.annotation.generated.PolylineAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
 import com.mapbox.maps.plugin.annotation.generated.createPolylineAnnotationManager
 import com.mapbox.maps.plugin.locationcomponent.location
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
+import com.birdy.kit.tracking.OrderTrackingSocket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -93,15 +90,18 @@ private var isFetchingRoute: Boolean = false
 
 // MARK: - DriverTrackingScreen — Matches iOS DriverTracking.swift
 // Uses Mapbox Maps (same as iOS) to avoid Google Play Services issues.
-// Listens to Firebase Realtime Database for driver location and shows it on the map.
+// Shows the shopper's live location for one order, from udo3 over Phoenix
+// (`OrderTrackingSocket`). It appears once the order is picked up.
 
 @Composable
 fun DriverTrackingScreen(
+    /** The order being watched. Passed in by whoever opens this screen; never guessed. */
+    orderId: String,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
 
-    // Driver location from Firebase
+    // Driver location from udo3
     var driverLat by remember { mutableStateOf(0.0) }
     var driverLng by remember { mutableStateOf(0.0) }
     var driverBearing by remember { mutableStateOf(-1.0) }
@@ -109,8 +109,11 @@ fun DriverTrackingScreen(
     var isDriverActive by remember { mutableStateOf(false) }
     var hasDriverLocation by remember { mutableStateOf(false) }
 
-    // Firebase reference for cleanup
-    var firebaseListener by remember { mutableStateOf<ValueEventListener?>(null) }
+    // When the last point arrived (the phone's clock), for "Updated Xs ago".
+    var lastUpdateAt by remember { mutableStateOf<Long?>(null) }
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    // Why tracking ended: "completed" or "cancelled". null while live or waiting.
+    var trackingEnd by remember { mutableStateOf<String?>(null) }
 
     // Options menu
     var showOptionsMenu by remember { mutableStateOf(false) }
@@ -130,49 +133,63 @@ fun DriverTrackingScreen(
     var currentDisplayPoint by remember { mutableStateOf<Point?>(null) }
     val coroutineScope = rememberCoroutineScope()
     var interpolationJob by remember { mutableStateOf<Job?>(null) }
-    var lastFirebaseUpdateTime by remember { mutableStateOf(0L) }
+    var lastPointTime by remember { mutableStateOf(0L) }
 
-    // MARK: - Firebase Realtime Database Listener
-    DisposableEffect(Unit) {
-        val ref = FirebaseDatabase.getInstance().reference
-            .child("active_rides")
-            .child("test-ride")
-            .child("location")
-
-        val listener = object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                val value = snapshot.value as? Map<*, *> ?: run {
-                    Log.w("DriverTracking", "⚠️ No driver location data found")
-                    return
-                }
-
-                val lat = value["lat"] as? Double ?: return
-                val lng = value["lng"] as? Double ?: return
-
-                driverLat = lat
-                driverLng = lng
-                hasDriverLocation = true
-                driverBearing = value["bearing"] as? Double ?: -1.0
-                driverSpeed = value["speed"] as? Double ?: 0.0
-                isDriverActive = value["isActive"] as? Boolean ?: false
-
-                Log.d("DriverTracking", "📍 Driver location updated: $lat, $lng | bearing: $driverBearing | speed: $driverSpeed")
-            }
-
-            override fun onCancelled(error: DatabaseError) {
-                Log.e("DriverTracking", "❌ Firebase listener cancelled: ${error.message}")
-            }
-        }
-
-        ref.addValueEventListener(listener)
-        firebaseListener = listener
-        Log.d("DriverTracking", "🔥 Started listening to Firebase: active_rides/test-ride/location")
+    // MARK: - Live location (udo3)
+    DisposableEffect(orderId) {
+        if (orderId.isNotEmpty()) OrderTrackingSocket.watch(orderId)
+        else Log.w("DriverTracking", "⚠️ No orderId — nothing to track")
 
         onDispose {
-            ref.removeEventListener(listener)
-            firebaseListener = null
+            OrderTrackingSocket.stop()
             interpolationJob?.cancel()
-            Log.d("DriverTracking", "🔥 Stopped listening to Firebase driver location")
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        OrderTrackingSocket.location.collect { point ->
+            // The first point after joining is the last saved one, which can be up to 20s
+            // old. Use its server time, but never later than the phone's own clock.
+            val receivedAt = System.currentTimeMillis()
+            lastUpdateAt = if (hasDriverLocation) receivedAt else minOf(receivedAt, point.atMillis ?: receivedAt)
+
+            driverLat = point.lat
+            driverLng = point.lng
+            driverBearing = point.heading ?: -1.0
+            driverSpeed = point.speed ?: 0.0
+            hasDriverLocation = true
+            isDriverActive = true
+            trackingEnd = null
+        }
+    }
+
+    // The same reason can arrive twice; repeats change nothing.
+    LaunchedEffect(Unit) {
+        OrderTrackingSocket.ended.collect { reason ->
+            when (reason) {
+                "completed", "cancelled" -> if (trackingEnd != reason) {
+                    trackingEnd = reason
+                    isDriverActive = false
+                }
+                // Released (or the join was refused): back to waiting for a shopper.
+                else -> {
+                    trackingEnd = null
+                    isDriverActive = false
+                    hasDriverLocation = false
+                    lastUpdateAt = null
+                    // Clear the old shopper's dot; the next shopper's first point snaps in fresh.
+                    interpolationJob?.cancel()
+                    pointAnnotationManager?.deleteAll()
+                    currentDisplayPoint = null
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = System.currentTimeMillis()
+            delay(1_000)
         }
     }
 
@@ -186,7 +203,7 @@ fun DriverTrackingScreen(
         if (currentDisplayPoint == null) {
             // First location — snap immediately (no interpolation)
             currentDisplayPoint = newPoint
-            lastFirebaseUpdateTime = System.currentTimeMillis()
+            lastPointTime = System.currentTimeMillis()
 
             // Place marker immediately
             placeDriverMarker(ptMgr, newPoint)
@@ -202,9 +219,9 @@ fun DriverTrackingScreen(
             )
         } else {
             // Subsequent updates — smooth interpolation
-            val now = System.currentTimeMillis()
-            val timeSinceLastUpdate = (now - lastFirebaseUpdateTime) / 1000.0
-            lastFirebaseUpdateTime = now
+            val nowMs = System.currentTimeMillis()
+            val timeSinceLastUpdate = (nowMs - lastPointTime) / 1000.0
+            lastPointTime = nowMs
 
             var animationDuration = 2500L
             if (timeSinceLastUpdate in 0.5..10.0) {
@@ -333,12 +350,27 @@ fun DriverTrackingScreen(
                                 )
                         )
                         Text(
-                            text = if (isDriverActive) "Driver Active" else "Tracking Driver",
+                            text = driverStatusText(isDriverActive, lastUpdateAt, now),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White
                         )
                     }
+                }
+            }
+
+            trackingCard(orderId, trackingEnd, hasDriverLocation)?.let { (title, detail) ->
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 16.dp, top = 12.dp)
+                        .shadow(6.dp, RoundedCornerShape(14.dp))
+                        .background(Color.White, RoundedCornerShape(14.dp))
+                        .padding(14.dp)
+                ) {
+                    Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                    Text(text = detail, fontSize = 14.sp, color = Color.Gray)
                 }
             }
         }
@@ -486,6 +518,20 @@ fun DriverTrackingScreen(
 }
 
 // MARK: - Place driver marker on Mapbox map
+private fun driverStatusText(isDriverActive: Boolean, lastUpdateAt: Long?, now: Long): String {
+    if (!isDriverActive || lastUpdateAt == null) return "Tracking Driver"
+    val seconds = maxOf(0L, (now - lastUpdateAt) / 1000)
+    return if (seconds < 5) "Live" else "Updated ${seconds}s ago"
+}
+
+private fun trackingCard(orderId: String, trackingEnd: String?, hasDriverLocation: Boolean): Pair<String, String>? = when {
+    orderId.isEmpty() -> "No active order" to "There's no order to track right now."
+    trackingEnd == "completed" -> "Delivered" to "Your order has been delivered."
+    trackingEnd == "cancelled" -> "Order cancelled" to "This order was cancelled."
+    !hasDriverLocation -> "Waiting for pickup" to "You'll see your shopper here once they leave the store."
+    else -> null
+}
+
 private fun placeDriverMarker(
     ptMgr: PointAnnotationManager,
     point: Point

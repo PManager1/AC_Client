@@ -563,6 +563,8 @@ fun BirdyAppContent() {
         // Rendered OUTSIDE Scaffold so it covers the entire screen including bottom nav
         if (CartManager.showDriverTracking) {
             DriverTrackingScreen(
+                // Set from the POST /orders response just before this opens (Checkout).
+                orderId = CartManager.orderId,
                 onBack = {
                     CartManager.showDriverTracking = false
                 }
