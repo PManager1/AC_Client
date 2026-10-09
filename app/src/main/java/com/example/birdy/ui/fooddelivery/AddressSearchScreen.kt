@@ -248,6 +248,7 @@ private fun fetchSuggestions(text: String): List<AddressSuggestion> {
     return try {
         val url = URL("https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${java.net.URLEncoder.encode(text, "UTF-8")}&key=${Config.GOOGLE_API_KEY}&language=en&components=country:us")
         val connection = url.openConnection() as HttpURLConnection
+        com.birdy.kit.config.AppConfig.googleHeaders().forEach { (k, v) -> connection.setRequestProperty(k, v) }
         connection.connectTimeout = 5000
         connection.readTimeout = 5000
         val json = connection.inputStream.bufferedReader().use { it.readText() }
@@ -274,6 +275,7 @@ private fun geocodePlace(suggestion: AddressSuggestion): AddressSearchResult? {
     return try {
         val url = URL("https://maps.googleapis.com/maps/api/geocode/json?place_id=${suggestion.id}&key=${Config.GOOGLE_API_KEY}")
         val connection = url.openConnection() as HttpURLConnection
+        com.birdy.kit.config.AppConfig.googleHeaders().forEach { (k, v) -> connection.setRequestProperty(k, v) }
         connection.connectTimeout = 5000
         connection.readTimeout = 5000
         val json = connection.inputStream.bufferedReader().use { it.readText() }

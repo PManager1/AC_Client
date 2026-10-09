@@ -97,6 +97,8 @@ class MainActivity : ComponentActivity() {
         OrderChat.configure(Config.API_BASE_URL, { AuthManager.getToken() }, { AuthManager.getUserID() })
         // Live saved-cart changes from the web or another device (keeps the socket open while signed in).
         com.example.birdy.data.CartManager.startLiveUpdates()
+        // Client keys (Stripe, Maps, ...) from /appconfig: cached copy now, background refresh for next launch.
+        com.birdy.kit.config.AppConfig.init(applicationContext, Config.API_BASE_URL)
         // Initialize Stripe SDK — matches iOS AppDelegate stripeInit()
         PaymentConfiguration.init(applicationContext, Config.STRIPE_PUBLISHABLE_KEY)
         enableEdgeToEdge()

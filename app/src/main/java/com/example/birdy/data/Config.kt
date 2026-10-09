@@ -1,5 +1,7 @@
 package com.example.birdy.data
 
+import com.birdy.kit.config.AppConfig
+
 /**
  * App configuration — mirrors iOS BirdyKit/Config.swift
  */
@@ -14,12 +16,13 @@ object Config {
     // WebSocket API (separate API Gateway deployment from REST API) — matches iOS BirdyKit/Config.swift
     const val WS_API_BASE_URL = "wss://fg1a60piqh.execute-api.us-east-1.amazonaws.com/dev"
 
-    // Stripe — launch default only. Checkout and Wallet use the server's key (/payments/intents, /payments/config).
-    const val STRIPE_PUBLISHABLE_KEY = "pk_test_51SFypI0MYmEMIsHRtYIOAUZM2RcBNIjQA2QAqo24SsxN16RqMI8pX2rNg3PiPUpHrTpZfm20gQexljYH0ZS5erdG00jfHGuiTs"
+    // Client keys: from GET /appconfig (BirdyKitAndroid AppConfig), else the baked-in key there.
+    // Stripe: launch default only. Checkout and Wallet use the server's key (/payments/intents, /payments/config).
+    val STRIPE_PUBLISHABLE_KEY: String get() = AppConfig.stripePublishableKey
 
     // Mapbox — public access token for map rendering (loaded from local.properties via BuildConfig)
-    val MAPBOX_ACCESS_TOKEN: String = com.example.birdy.BuildConfig.MAPBOX_ACCESS_TOKEN
+    val MAPBOX_ACCESS_TOKEN: String get() = AppConfig.mapboxToken ?: com.example.birdy.BuildConfig.MAPBOX_ACCESS_TOKEN
 
-    // Google — matches iOS BirdyKit/Config.swift
-    const val GOOGLE_API_KEY = "AIzaSyDTm4xeMjg5_GFa2YYUE6zsk2-vagqlAno"
+    // Google Places/Geocoding REST (send with AppConfig.googleHeaders()). The Maps SDK key is in the manifest.
+    val GOOGLE_API_KEY: String get() = AppConfig.googleApiKey
 }
